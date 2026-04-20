@@ -6,14 +6,22 @@ Last verified: 2026-04-20
 
 ## Status
 
-Phase 1 complete (foundation). The repo now has an Astro 6 skeleton, Zod content schemas for subjects/articles/sources/claims, subject-graph type surface, Vitest test infrastructure, and the `frisco-wiki` submodule wired at `src/content/wiki/`. No runtime content loader, reviewer, or deploy pipeline yet — those land in Phases 2–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+Phase 2 complete (schemas + graph + validator). The repo has an Astro 6 skeleton with registered content collections (subjects, articles), a canonical Zod schema module, a GFM footnote parser, a working `buildSubjectGraph` implementation, and a standalone validator CLI (`npm run validate`) covered by 25 Vitest tests. No reviewer or deploy pipeline yet — those land in Phases 3–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
 
 ### Key code locations
 
-- **Content schemas (normative surface):** `src/content.config.ts` exports `sourceSchema`, `claimSchema`, `subjectSchema`, `articleSchema` and matching TS types. Schema changes here are contract changes — update this CLAUDE.md and flag them.
-- **Subject graph types:** `src/lib/subject-graph.ts` defines `SubjectGraph`, `SubjectNode`, `ArticleNode`, `ResolvedFootnote`, `ActiveClaim`. The Phase 2 loader will construct these; consumers should depend on these shapes.
+- **Content schemas (canonical, normative surface):** `src/content-schemas.ts` is the **single source of truth** for `sourceSchema`, `claimSchema`, `subjectSchema`, `articleSchema` and their inferred TS types. Schema changes here are contract changes — update this CLAUDE.md and flag them. Both the Astro content layer and the standalone validator import from this module.
+- **Astro content-collection wiring:** `src/content.config.ts` registers the `subjects` and `articles` collections against `src/content/wiki/` and wraps the schemas for Astro's loader. See "zod v3/v4 seam" below.
+- **Footnote parser:** `src/lib/footnote-parser.ts` exports `extractFootnotes(markdown)` — AST-based GFM parse returning `{ label: body }` for every `[^label]: body` definition.
+- **Subject graph:** `src/lib/subject-graph.ts` exports `buildSubjectGraph(subjects, articles, allowedTypes)` returning a `SubjectGraph` with `subjects`/`articles` maps and derived predicates (`activeClaims`, `isLivingPerson`, `articlesReferencing`). Throws `FootnoteResolutionError` on unresolvable footnotes; the validator catches and reformats these.
+- **Content validator CLI:** `scripts/validate-content.ts` exports `validate(contentRoot, allowedTypesPath)` and runs via `npm run validate`. Rule names in its `ValidationError.rule` field (`schema`, `subject-id-unique`, `source-id-unique-within-subject`, `claim-source-resolves`, `p31-present`, `p31-allowlist`, `article-subjects-unique`, `primary-subject-in-subjects`, `no-orphan-subjects`, `footnote-no-match`, `footnote-ambiguous`) are a **stable API** — CI and humans grep for them, so rename only with care.
 - **P31 allowlist:** `config/allowed-types.yaml` — adding a subject of a new type requires adding its P31 value here.
 - **Wiki content submodule:** `src/content/wiki/` → `https://github.com/tieguy/frisco-wiki.git`. Subjects and articles live in the submodule, not this repo.
+
+### Architectural constraints introduced in Phase 2
+
+- **FCIS (functional core, imperative shell).** Pure logic (schemas, footnote parser, graph builder) lives in `src/content-schemas.ts` and `src/lib/*` with no I/O. The imperative shell (`scripts/validate-content.ts`, `src/content.config.ts`) handles filesystem reads and framework wiring. Preserve this split when adding new logic — new pure code goes in `src/lib/`, not in scripts.
+- **Zod v3 / v4 seam.** This project depends on standalone `zod@3`, but `astro:content`'s type surface expects an `astro/zod` (v4) schema. `src/content.config.ts` narrow-casts via `BaseSchema` at the single call site. Runtime validation works (safeParseAsync); `astro check`/`astro build` emit a non-fatal JSON-schema-generation warning per collection. Do not pull `astro/zod` into `src/content-schemas.ts` — the standalone zod@3 module must stay importable from the validator without Astro's runtime.
 
 ## Normative references
 
@@ -31,7 +39,7 @@ Phase 1 complete (foundation). The repo now has an Astro 6 skeleton, Zod content
 
 ## Architecture snapshot (MVP)
 
-See the design plan for full detail. One-line summary: three-repo split (`friski-code` holds the Astro 6 app + tooling, `frisco-wiki` holds `subjects/*.yaml` and `articles/*.md` consumed via git submodule at `src/content/wiki/`, `frisco-archives` is deferred). Subjects own claims; articles are prose views. A GitHub Actions reviewer runs three LLM-driven checks (claim coverage, source support, NPOV) on content PRs, advisory only. Merge to `frisco-wiki` main triggers an automated submodule bump and Netlify deploy.
+See the design plan for full detail. One-line summary: three-repo split (`friski-code` holds the Astro 6 app + tooling, `frisco-wiki` holds `subjects/*.yaml` and `articles/*.md` consumed via git submodule at `src/content/wiki/`, `frisco-archives` is deferred). Subjects own claims; articles are prose views. Content is validated by a standalone CLI (`npm run validate`) and loaded into an in-memory `SubjectGraph` for downstream consumers. A GitHub Actions reviewer runs three LLM-driven checks (claim coverage, source support, NPOV) on content PRs, advisory only. Merge to `frisco-wiki` main triggers an automated submodule bump and Netlify deploy.
 
 ## When making technical decisions
 
