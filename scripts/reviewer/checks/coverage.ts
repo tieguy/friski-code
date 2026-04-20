@@ -39,6 +39,7 @@ export async function runCoverageCheck(
     message: r.message,
     assertion: r.assertion,
     line: r.line,
+    quote: r.quote,
   }));
 
   return { check: 'coverage', findings, errors };
