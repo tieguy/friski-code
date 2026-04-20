@@ -29,12 +29,10 @@ function loadFixtures() {
   return { subjects, articles };
 }
 
-const ALLOWED_TYPES = ['Q5', 'Q43229', 'Q515', 'Q1048835', 'F-neighborhood', 'F-landmark'];
-
 describe('buildSubjectGraph', () => {
   test('populates subjects and articles maps', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     expect(graph.subjects.size).toBe(2);
     expect(graph.articles.size).toBe(1);
     expect(graph.subjects.has('jackie-fielder')).toBe(true);
@@ -42,28 +40,28 @@ describe('buildSubjectGraph', () => {
 
   test('derives types from P31 claims', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     expect(graph.subjects.get('jackie-fielder')?.types).toEqual(['Q5']);
     expect(graph.subjects.get('sf-board-of-supervisors')?.types).toEqual(['Q43229']);
   });
 
   test('is_living_person true for human subject with no death date', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     expect(graph.isLivingPerson('jackie-fielder')).toBe(true);
     expect(graph.isLivingPerson('sf-board-of-supervisors')).toBe(false);
   });
 
   test('articlesReferencing returns articles that list the subject', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     const refs = graph.articlesReferencing('sf-board-of-supervisors');
     expect(refs.map((a) => a.slug)).toEqual(['jackie-fielder']);
   });
 
   test('activeClaims filters to claims with end=null', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     const active = graph.activeClaims('P39');
     expect(active).toHaveLength(1);
     expect(active[0]?.subjectId).toBe('jackie-fielder');
@@ -71,7 +69,7 @@ describe('buildSubjectGraph', () => {
 
   test('footnotes resolved against subjects[] of the article', () => {
     const { subjects, articles } = loadFixtures();
-    const graph = buildSubjectGraph(subjects, articles, ALLOWED_TYPES);
+    const graph = buildSubjectGraph(subjects, articles);
     const article = graph.articles.get('jackie-fielder');
     expect(article?.footnotes).toHaveLength(1);
     expect(article?.footnotes[0]?.subjectId).toBe('jackie-fielder');

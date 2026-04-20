@@ -84,7 +84,6 @@ const P570 = 'P570';
 export function buildSubjectGraph(
   subjects: readonly SubjectInput[],
   articles: readonly ArticleInput[],
-  _allowedTypes: readonly string[],  // unused here; validator enforces
 ): SubjectGraph {
   const subjectNodes = new Map<string, SubjectNode>();
 

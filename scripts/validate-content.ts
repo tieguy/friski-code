@@ -142,7 +142,7 @@ export function validate(
   // 4. Build subject graph to surface footnote resolution errors
   // Run unconditionally to surface footnote errors alongside other errors.
   try {
-    buildSubjectGraph(subjects, articles, allowedTypes);
+    buildSubjectGraph(subjects, articles);
   } catch (e) {
     if (e instanceof FootnoteResolutionError) {
       errors.push({
