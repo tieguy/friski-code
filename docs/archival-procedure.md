@@ -32,6 +32,8 @@ find alternative reporting at an eligible outlet or defer the assertion.
 
 ## Adding a source
 
+If you are creating a new subject, use `npm run new-subject` (see Phase 4 tooling) to scaffold the YAML first — the scaffolder emits placeholder archive URLs that this procedure replaces.
+
 1. Find the article URL. Read it as a human first — make sure it supports
    the specific claim you're about to cite.
 
@@ -41,11 +43,12 @@ find alternative reporting at an eligible outlet or defer the assertion.
    npm run ensure-archived -- --file src/content/wiki/subjects/<slug>.yaml
    ```
 
-   The script iterates the subject's sources, submits any source without
-   `archive.url` to Wayback's Save Page Now, polls until capture completes
-   (typically under 2 minutes), and writes the resulting snapshot URL back
-   into the file. It sets `archive.method: wayback` and leaves
-   `archive.access: public` (the default).
+   The script iterates the subject's sources, submits any source whose
+   `archive.url` is still a placeholder (a `/web/[012]/...` pattern emitted
+   by the scaffolder) to Wayback's Save Page Now, polls until capture
+   completes (typically under 2 minutes), writes the snapshot URL back into
+   the file. It sets `archive.method: wayback` and leaves `archive.access:
+   public` (the default).
 
 3. Commit the subject file.
 

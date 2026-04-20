@@ -35,7 +35,7 @@ Phase 3 complete (render pipeline). On top of Phase 2's schemas/graph/validator,
 
 **Technical architecture — `plans/design-plans/2026-04-20-mvp.md`** is the canonical reference for the MVP's scope, repo layout, data model, reviewer shape, and phased implementation. Read this before proposing code changes.
 
-**Editorial policy — `plans/2026-04-19-plan-0.1.md` §2** remains normative for editorial principles (NPOV adaptation, source tiers, scope discipline, "releasable" criteria) until the principles are extracted into `docs/editorial-principles.md` in implementation Phase 4. The rest of that document's technical architecture is **superseded** by the design plan.
+**Editorial policy — `docs/editorial-principles.md`** is the normative reference for editorial principles (NPOV adaptation, source tiers, scope discipline). Extracted from `plans/2026-04-19-plan-0.1.md` §2 in Phase 4. The rest of that document's technical architecture is **superseded** by the design plan.
 
 **Deferred thinking — `plans/deferred/archival-and-captures.md`** preserves the paywall-aware archival design (WARC captures, `frisco-archives` repo, browser-capture UX research) pulled out of MVP scope. Consult when Phase 1 archival work begins; don't rederive from scratch.
 
