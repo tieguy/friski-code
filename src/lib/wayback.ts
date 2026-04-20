@@ -61,6 +61,7 @@ export async function captureViaWayback(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await sleep(pollIntervalMs);
+    if (Date.now() >= deadline) break; // skip one final fetch if we slept past deadline
     const status = await fetch(SPN_STATUS(jobId), { headers });
     if (!status.ok) continue; // transient — retry
     const info = (await status.json()) as StatusResponse;
