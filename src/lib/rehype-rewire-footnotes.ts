@@ -11,6 +11,7 @@ export function rehypeRewireFootnotes() {
       if (typeof href !== 'string') return;
       if (href.startsWith('#user-content-fn-')) {
         node.properties!.href = '#fn-' + href.slice('#user-content-fn-'.length);
+        delete node.properties!.ariaDescribedBy;
       } else if (href.startsWith('#user-content-fnref-')) {
         node.properties!.href = '#fnref-' + href.slice('#user-content-fnref-'.length);
       }
