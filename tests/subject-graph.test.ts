@@ -11,14 +11,14 @@ import { subjectSchema, articleSchema } from '../src/content-schemas';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function loadFixtures() {
-  const subjectFiles = globSync('fixtures/subjects/*.yaml', { cwd: __dirname });
+  const subjectFiles = globSync('fixtures/subjects/[!_]*.yaml', { cwd: __dirname });
   const subjects = subjectFiles.map((rel) => {
     const raw = readFileSync(join(__dirname, rel), 'utf8');
     const data = subjectSchema.parse(yaml.load(raw));
     return { id: data.id, data };
   });
 
-  const articleFiles = globSync('fixtures/articles/*.md', { cwd: __dirname });
+  const articleFiles = globSync('fixtures/articles/[!_]*.md', { cwd: __dirname });
   const articles = articleFiles.map((rel) => {
     const raw = readFileSync(join(__dirname, rel), 'utf8');
     const parsed = matter(raw);
