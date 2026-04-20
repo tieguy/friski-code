@@ -78,15 +78,15 @@ npm run ensure-archived -- --url "https://missionlocal.org/..."
 If the second try still fails, the source is either out-of-scope for MVP or
 needs Phase 1 tooling. For MVP: choose a different source.
 
-## Checking an existing snapshot
+## One-shot capture
 
 ```sh
 npm run ensure-archived -- --url "https://missionlocal.org/..."
 ```
 
-(`--url` takes one URL and prints the snapshot URL if one exists or
-triggers a capture if not. Doesn't write to any file; useful for
-spot-checks.)
+(`--url` submits one URL to Wayback and prints the resulting snapshot URL.
+Doesn't read or write any subject file; useful for a single ad-hoc capture.
+Always triggers a fresh Save Page Now submission, so burns one quota slot.)
 
 ## Future scope
 
