@@ -2,9 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Last verified: 2026-04-20
+
 ## Status
 
-Design complete, implementation pending. The repo holds the design plan, editorial/strategic plan, and deferred-phases notes. No application code yet. Phase 0 implementation will stand up the site skeleton + minimum-viable reviewer.
+Phase 1 complete (foundation). The repo now has an Astro 6 skeleton, Zod content schemas for subjects/articles/sources/claims, subject-graph type surface, Vitest test infrastructure, and the `frisco-wiki` submodule wired at `src/content/wiki/`. No runtime content loader, reviewer, or deploy pipeline yet — those land in Phases 2–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+
+### Key code locations
+
+- **Content schemas (normative surface):** `src/content.config.ts` exports `sourceSchema`, `claimSchema`, `subjectSchema`, `articleSchema` and matching TS types. Schema changes here are contract changes — update this CLAUDE.md and flag them.
+- **Subject graph types:** `src/lib/subject-graph.ts` defines `SubjectGraph`, `SubjectNode`, `ArticleNode`, `ResolvedFootnote`, `ActiveClaim`. The Phase 2 loader will construct these; consumers should depend on these shapes.
+- **P31 allowlist:** `config/allowed-types.yaml` — adding a subject of a new type requires adding its P31 value here.
+- **Wiki content submodule:** `src/content/wiki/` → `https://github.com/tieguy/frisco-wiki.git`. Subjects and articles live in the submodule, not this repo.
 
 ## Normative references
 
@@ -22,7 +31,7 @@ Design complete, implementation pending. The repo holds the design plan, editori
 
 ## Architecture snapshot (MVP)
 
-See the design plan for full detail. One-line summary: three-repo split (`friski-code` holds the Astro 5 app + tooling, `frisco-wiki` holds `subjects/*.yaml` and `articles/*.md` consumed via git submodule, `frisco-archives` is deferred to Phase 1). Subjects own claims; articles are prose views. A GitHub Actions reviewer runs three LLM-driven checks (claim coverage, source support, NPOV) on content PRs, advisory only. Merge to `frisco-wiki` main triggers an automated submodule bump and Netlify deploy.
+See the design plan for full detail. One-line summary: three-repo split (`friski-code` holds the Astro 6 app + tooling, `frisco-wiki` holds `subjects/*.yaml` and `articles/*.md` consumed via git submodule at `src/content/wiki/`, `frisco-archives` is deferred). Subjects own claims; articles are prose views. A GitHub Actions reviewer runs three LLM-driven checks (claim coverage, source support, NPOV) on content PRs, advisory only. Merge to `frisco-wiki` main triggers an automated submodule bump and Netlify deploy.
 
 ## When making technical decisions
 
