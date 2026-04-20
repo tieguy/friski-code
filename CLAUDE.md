@@ -6,7 +6,7 @@ Last verified: 2026-04-20
 
 ## Status
 
-Phase 3 complete (render pipeline). On top of Phase 2's schemas/graph/validator, the site now renders: a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`). `astro build` produces a static site from the fixture wiki. No reviewer or deploy pipeline yet — those land in Phases 4–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+Phase 4 complete (authoring tooling + editorial docs). Phase 3's render pipeline ships a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`); `astro build` produces a static site from the fixture wiki. Phase 4 adds two authoring CLIs (`new-subject`, `ensure-archived`) backed by pure cores in `src/lib/` (Wikidata fetch, Wayback Save Page Now client), plus extracted editorial docs (`docs/editorial-principles.md`, `docs/archival-procedure.md`). No reviewer or deploy pipeline yet — those land in Phase 5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
 
 ### Key code locations
 
@@ -19,6 +19,12 @@ Phase 3 complete (render pipeline). On top of Phase 2's schemas/graph/validator,
 - **Wiki content submodule:** `src/content/wiki/` → `https://github.com/tieguy/frisco-wiki.git`. Subjects and articles live in the submodule, not this repo.
 - **Graph access at render time:** `src/lib/get-graph.ts` exports `getGraph(): Promise<SubjectGraph>` — module-level cached imperative shell that calls `getCollection('subjects' | 'articles')` and hands off to `buildSubjectGraph`. **All pages and components read the graph via `getGraph()`**; do not re-invoke `buildSubjectGraph` from pages, and do not call `getCollection` directly from components. The cache is per-module-instance (fine for Astro's static build; revisit if SSR is added).
 - **Pages and components:** `src/layouts/BaseLayout.astro` (shared HTML shell), `src/components/{SubjectRef,Citation,ClaimsTable}.astro` (prose/subject rendering primitives), `src/pages/[slug].astro` (article renderer), `src/pages/subjects/[id].astro` (subject page: claims table + backlinks), `src/pages/index.astro` (content listing), `src/pages/index/current-supervisors.astro` (query-derived index — pattern for future derived indices). Site CSS lives in `public/style.css`.
+- **Authoring tooling (Phase 4).** Two CLIs backed by pure cores:
+  - `src/lib/wikidata.ts` exports `fetchWikidataEntity(qid)` → `{ label, description, instanceOf[] }`. Sends a descriptive User-Agent; tested against `tests/fixtures/wikidata-q99524088.json`.
+  - `src/lib/wayback.ts` exports `captureViaWayback(url, opts)` (Save Page Now submit+poll). `CaptureOptions` honors `s3Key`/`s3Secret`; env vars `ARCHIVE_ORG_S3_KEY` / `ARCHIVE_ORG_S3_SECRET` enable authenticated captures (6/min vs 3/min anonymous). `timeoutMs` is a hard deadline on the poll loop.
+  - `scripts/new-subject.ts` exports `scaffoldSubject({ qid, slug, outputDir })`; run as `npm run new-subject`. Writes a subject YAML seeded from Wikidata with **placeholder archive URLs** of the form `https://web.archive.org/web/[012]/<original-url>`.
+  - `scripts/ensure-archived.ts` exports `ensureArchivedInFile(filePath, opts)`; run as `npm run ensure-archived` with `--url` or `--file` modes. Recognizes placeholder URLs via `/^https:\/\/web\.archive\.org\/web\/[012]\//` and replaces them with concrete Wayback snapshots. **Partial-failure persistence:** successful captures in a batch are written even if later captures fail, via tmp-file + `renameSync` (POSIX-atomic replace).
+  - **Contract between the two scripts:** the placeholder-URL regex is the handoff. `new-subject` must emit URLs matching it; `ensure-archived` must treat any URL matching it as "not yet captured." Change the pattern in one place and the other breaks silently.
 
 ### Architectural constraints (Phase 2–3)
 
