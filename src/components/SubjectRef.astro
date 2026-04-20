@@ -1,0 +1,8 @@
+---
+interface Props {
+  subjectId: string;
+  label?: string;
+}
+const { subjectId, label } = Astro.props;
+---
+<a href={`/subjects/${subjectId}`}>{label ?? subjectId}</a>

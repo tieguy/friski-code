@@ -1,0 +1,48 @@
+---
+import { getCollection, render } from 'astro:content';
+import type { Article } from '../content-schemas';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Citation from '../components/Citation.astro';
+import SubjectRef from '../components/SubjectRef.astro';
+import { getGraph } from '../lib/get-graph';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('articles');
+  return articles.map((entry) => ({
+    params: { slug: (entry.data as Article).slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const data = entry.data as Article;
+const graph = await getGraph();
+const node = graph.articles.get(data.slug);
+const { Content } = await render(entry);
+const subjectLinks = data.subjects;
+---
+<BaseLayout title={data.title}>
+  <article>
+    <h1>{data.title}</h1>
+    <p class="subjects-referenced">
+      References:{' '}
+      {subjectLinks.map((sid: string, i: number) => (
+        <>
+          <SubjectRef subjectId={sid} label={graph.subjects.get(sid)?.label} />
+          {i < subjectLinks.length - 1 ? ', ' : ''}
+        </>
+      ))}
+    </p>
+    <Content />
+    {node && node.footnotes.length > 0 && (
+      <section class="sources-cited" aria-labelledby="sources-heading">
+        <h2 id="sources-heading">Sources cited</h2>
+        <ol>
+          {node.footnotes.map((fn) => (
+            <Citation source={fn.source} label={fn.label} />
+          ))}
+        </ol>
+      </section>
+    )}
+  </article>
+</BaseLayout>

@@ -1,0 +1,20 @@
+---
+import type { Source } from '../content-schemas';
+interface Props {
+  source: Source;
+  label: string;
+}
+const { source, label } = Astro.props;
+const dateText = source.date_published
+  ? new Date(source.date_published).toISOString().slice(0, 10)
+  : null;
+---
+<li id={`fn-${label}`}>
+  <strong>{source.publication}</strong>{source.author ? `, ${source.author}` : ''}
+  {dateText && <>, <time datetime={dateText}>{dateText}</time></>}
+  {' — '}
+  <a href={source.url} rel="external noopener">original</a>
+  {source.archive.access === 'public' && (
+    <> | <a href={source.archive.url} rel="external noopener">archive</a></>
+  )}
+</li>
