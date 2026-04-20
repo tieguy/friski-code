@@ -13,7 +13,8 @@ export async function getStaticPaths() {
 
 const { subjectId } = Astro.props;
 const graph = await getGraph();
-const subject = graph.subjects.get(subjectId)!;
+const subject = graph.subjects.get(subjectId);
+if (!subject) throw new Error(`[subjects/[id]] Subject not found in graph: ${subjectId}`);
 const backlinks = graph.articlesReferencing(subjectId);
 ---
 <BaseLayout title={subject.label}>

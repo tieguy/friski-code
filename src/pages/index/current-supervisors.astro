@@ -1,16 +1,24 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getGraph } from '../../lib/get-graph';
+import { formatYmd } from '../../lib/format-date';
+
+const SUPERVISOR_CLAIM = /^F-SF-D([0-9]+)-Supervisor$/;
 
 const graph = await getGraph();
 const supervisors = graph
   .activeClaims('P39')
-  .filter((ac) => /^F-SF-D[0-9]+-Supervisor$/.test(ac.claim.value))
-  .map((ac) => ({
-    subject: graph.subjects.get(ac.subjectId)!,
-    district: Number(ac.claim.value.match(/^F-SF-D([0-9]+)-Supervisor$/)?.[1] ?? 0),
-    start: ac.claim.start,
-  }))
+  .flatMap((ac) => {
+    const match = ac.claim.value.match(SUPERVISOR_CLAIM);
+    if (!match) return [];
+    const subject = graph.subjects.get(ac.subjectId);
+    if (!subject) throw new Error(`[current-supervisors] Subject not found in graph: ${ac.subjectId}`);
+    return [{
+      subject,
+      district: Number(match[1]),
+      start: ac.claim.start,
+    }];
+  })
   .sort((a, b) => a.district - b.district);
 ---
 <BaseLayout title="Current SF Supervisors">
@@ -35,7 +43,7 @@ const supervisors = graph
           <tr>
             <td>D{district}</td>
             <td><a href={`/subjects/${subject.id}`}>{subject.label}</a></td>
-            <td>{start ? new Date(start).toISOString().slice(0, 10) : '—'}</td>
+            <td>{formatYmd(start) || '—'}</td>
           </tr>
         ))}
       </tbody>
