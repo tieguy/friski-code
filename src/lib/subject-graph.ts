@@ -1,4 +1,5 @@
-import type { Article, Claim, Source, Subject } from '../content.schemas';
+// Functional core: in-memory subject-graph types. Populated by Phase 2 loader.
+import type { Article, Claim, Source, Subject } from '../content-schemas';
 
 // In-memory representation of the content corpus.
 // Constructed in Phase 2 by the content loader; these are the shapes.

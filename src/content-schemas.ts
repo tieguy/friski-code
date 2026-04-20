@@ -1,4 +1,5 @@
-import { z } from 'astro/zod';
+// Functional core: pure Zod schemas for content validation. No runtime side effects.
+import { z } from 'zod';
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
 const claimId = z.string().regex(/^C[0-9]{3,}$/);
