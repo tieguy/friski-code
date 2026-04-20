@@ -55,6 +55,15 @@ especially for claims about living people.
   finance), organizational websites for non-controversial facts about the
   organization itself, public meeting transcripts, Wikidata.
 
+  *Wikidata specifically:* acceptable only for categorical or foundational
+  claims — `P31` (instance of), `P17` (country), `P131` (located in
+  administrative entity), `P27` (citizenship), `P569`/`P570` (birth/death
+  date), `P571` (inception date), and similar structured properties that
+  Wikidata itself derives from primary records. Narrative prose,
+  neighborhood geography, cultural significance, historical context,
+  quotations, or any interpretive content cited to Wikidata is a reviewer
+  flag — pair with a Tier-1 source or a primary government record instead.
+
 - **Tier 3 — Heightened scrutiny.** Personal blogs of named journalists or
   researchers with relevant expertise; Substack and similar with clear
   bylines; neighborhood association newsletters; SF Weekly, SFist, Hoodline
