@@ -16,8 +16,8 @@ describe('scaffoldSubject', () => {
     const canned = JSON.parse(
       readFileSync(join(__dirname, 'fixtures', 'wikidata-q99524088.json'), 'utf8'),
     );
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(canned), { status: 200 }),
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify(canned), { status: 200 })),
     );
 
     const outDir = mkdtempSync(join(tmpdir(), 'scaffold-'));
@@ -49,8 +49,8 @@ describe('scaffoldSubject', () => {
     const canned = JSON.parse(
       readFileSync(join(__dirname, 'fixtures', 'wikidata-q99524088.json'), 'utf8'),
     );
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(canned), { status: 200 }),
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify(canned), { status: 200 })),
     );
 
     const outDir = mkdtempSync(join(tmpdir(), 'scaffold-'));
