@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
 const claimId = z.string().regex(/^C[0-9]{3,}$/);
-const property = z.string().regex(/^(P[0-9]+|F-[A-Za-z0-9-]+)$/);
-const value = z.string().regex(/^(Q[0-9]+|F-[A-Za-z0-9-]+)$/);
+const friskiLocal = /F-[A-Za-z0-9-]+/;
+const property = z.string().regex(new RegExp(`^(P[0-9]+|${friskiLocal.source})$`));
+const value = z.string().regex(new RegExp(`^(Q[0-9]+|${friskiLocal.source})$`));
 
 export const sourceSchema = z.object({
   id: slug,
@@ -26,7 +27,7 @@ export const claimSchema = z.object({
   value: value,
   start: z.coerce.date().nullable().optional(),
   end: z.coerce.date().nullable().optional(),
-  source: slug,  // references a source.id within the same subject
+  source: slug,  // exact-lookup into sources[] enforced by Phase 2 loader, not here
 });
 
 export const subjectSchema = z.object({
