@@ -14,7 +14,7 @@ function loadYaml(path: string): unknown {
 
 describe('subjectSchema', () => {
   test('validates a hand-crafted valid subject YAML', () => {
-    const data = loadYaml('fixtures/valid-subject.yaml');
+    const data = loadYaml('fixtures/subjects/jackie-fielder.yaml');
     const result = subjectSchema.safeParse(data);
     if (!result.success) {
       throw new Error(
@@ -25,14 +25,14 @@ describe('subjectSchema', () => {
   });
 
   test('rejects a subject with no claims', () => {
-    const data = loadYaml('fixtures/valid-subject.yaml') as Record<string, unknown>;
+    const data = loadYaml('fixtures/subjects/jackie-fielder.yaml') as Record<string, unknown>;
     data.claims = [];
     const result = subjectSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
   test('rejects a claim with invalid P-number format', () => {
-    const data = loadYaml('fixtures/valid-subject.yaml') as Record<string, unknown>;
+    const data = loadYaml('fixtures/subjects/jackie-fielder.yaml') as Record<string, unknown>;
     (data.claims as { property: string }[])[0].property = 'not-a-property';
     const result = subjectSchema.safeParse(data);
     expect(result.success).toBe(false);

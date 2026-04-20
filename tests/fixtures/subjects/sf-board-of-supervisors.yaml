@@ -1,0 +1,25 @@
+id: sf-board-of-supervisors
+wikidata_qid: Q1128418
+label: San Francisco Board of Supervisors
+description: The legislative body of the City and County of San Francisco.
+scope: [institution, legislative-body]
+
+claims:
+  - id: C000
+    property: P31
+    value: Q43229
+    source: wd-sf-bos
+  - id: C001
+    property: P17
+    value: Q30
+    source: wd-sf-bos
+
+sources:
+  - id: wd-sf-bos
+    url: https://www.wikidata.org/wiki/Q1128418
+    publication: Wikidata
+    tier: 2
+    archive:
+      url: https://web.archive.org/web/2024/https://www.wikidata.org/wiki/Q1128418
+      method: wayback
+      access: public
