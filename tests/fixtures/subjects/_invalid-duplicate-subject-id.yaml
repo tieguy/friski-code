@@ -1,0 +1,21 @@
+id: jackie-fielder
+wikidata_qid: Q99524088
+label: Jackie Fielder (duplicate)
+description: Duplicate-id fixture for validator test.
+scope: [person]
+
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: some-source
+
+sources:
+  - id: some-source
+    url: https://example.org/dupe
+    publication: Example
+    tier: 3
+    archive:
+      url: https://web.archive.org/web/2024/https://example.org/dupe
+      method: wayback
+      access: public

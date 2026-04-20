@@ -119,4 +119,13 @@ describe('validate-content (rule coverage)', () => {
     const result = validate(root, allowedTypesPath);
     expect(result.errors.some((e) => e.rule === 'primary-subject-in-subjects')).toBe(true);
   });
+
+  test('flags duplicate subject.id across fixtures', () => {
+    const root = makeCorpus(
+      ['jackie-fielder.yaml', '_invalid-duplicate-subject-id.yaml'],
+      [],
+    );
+    const result = validate(root, allowedTypesPath);
+    expect(result.errors.some((e) => e.rule === 'subject-id-unique')).toBe(true);
+  });
 });
