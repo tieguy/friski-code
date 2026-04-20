@@ -1,11 +1,44 @@
 ---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getGraph } from '../lib/get-graph';
+
+const graph = await getGraph();
+const articles = Array.from(graph.articles.values()).sort((a, b) =>
+  a.title.localeCompare(b.title),
+);
+const subjects = Array.from(graph.subjects.values()).sort((a, b) =>
+  a.label.localeCompare(b.label),
+);
 ---
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Friski</title>
-  </head>
-  <body>
-    <p>Friski — coming soon.</p>
-  </body>
-</html>
+<BaseLayout title="Home">
+  <h1>Friski</h1>
+  <p>A structured, claim-based hyperlocal wiki for San Francisco.</p>
+  {articles.length === 0 && subjects.length === 0 ? (
+    <p><em>No content yet. This is the Phase 0 deploy.</em></p>
+  ) : (
+    <>
+      {articles.length > 0 && (
+        <section>
+          <h2>Articles</h2>
+          <ul>
+            {articles.map((a) => (<li><a href={`/${a.slug}`}>{a.title}</a></li>))}
+          </ul>
+        </section>
+      )}
+      {subjects.length > 0 && (
+        <section>
+          <h2>Subjects</h2>
+          <ul>
+            {subjects.map((s) => (<li><a href={`/subjects/${s.id}`}>{s.label}</a></li>))}
+          </ul>
+        </section>
+      )}
+      <section>
+        <h2>Indexes</h2>
+        <ul>
+          <li><a href="/index/current-supervisors">Current SF Supervisors</a></li>
+        </ul>
+      </section>
+    </>
+  )}
+</BaseLayout>

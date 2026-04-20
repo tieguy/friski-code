@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getGraph } from '../../lib/get-graph';
+
+const graph = await getGraph();
+const supervisors = graph
+  .activeClaims('P39')
+  .filter((ac) => /^F-SF-D[0-9]+-Supervisor$/.test(ac.claim.value))
+  .map((ac) => ({
+    subject: graph.subjects.get(ac.subjectId)!,
+    district: Number(ac.claim.value.match(/^F-SF-D([0-9]+)-Supervisor$/)?.[1] ?? 0),
+    start: ac.claim.start,
+  }))
+  .sort((a, b) => a.district - b.district);
+---
+<BaseLayout title="Current SF Supervisors">
+  <h1>Current San Francisco Board of Supervisors</h1>
+  <p>
+    Derived from active <code>P39</code> claims across subjects. This page is
+    regenerated at build time by filtering the subject graph.
+  </p>
+  {supervisors.length === 0 ? (
+    <p><em>No active supervisor claims in the current corpus.</em></p>
+  ) : (
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">District</th>
+          <th scope="col">Supervisor</th>
+          <th scope="col">Since</th>
+        </tr>
+      </thead>
+      <tbody>
+        {supervisors.map(({ subject, district, start }) => (
+          <tr>
+            <td>D{district}</td>
+            <td><a href={`/subjects/${subject.id}`}>{subject.label}</a></td>
+            <td>{start ? new Date(start).toISOString().slice(0, 10) : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+</BaseLayout>
