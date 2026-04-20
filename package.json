@@ -15,7 +15,8 @@
     "typecheck": "astro check && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate": "tsx scripts/validate-content.ts"
+    "validate": "tsx scripts/validate-content.ts",
+    "new-subject": "tsx scripts/new-subject.ts"
   },
   "dependencies": {
     "astro": "^6.1.0",

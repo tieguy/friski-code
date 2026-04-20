@@ -1,0 +1,17 @@
+{
+  "entities": {
+    "Q99524088": {
+      "labels": { "en": { "value": "Jackie Fielder" } },
+      "descriptions": { "en": { "value": "American politician and educator" } },
+      "claims": {
+        "P31": [
+          {
+            "mainsnak": {
+              "datavalue": { "value": { "id": "Q5" }, "type": "wikibase-entityid" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
