@@ -6,7 +6,15 @@
 
 **Goal:** A Node-based reviewer that collects a PR's changed content, runs three LLM-backed checks (claim coverage, source support, NPOV), composes a single structured PR comment, and produces findings Luis judges actionable and honest on both the clean seed corpus and deliberately-flawed fixture PRs.
 
-**Architecture:** Three independent check modules share a small LLM client wrapper (`scripts/reviewer/llm.ts`) that pins the model and temperature, applies prompt caching for the editorial-principles doc, and returns structured findings. The entry point (`scripts/reviewer/index.ts`) reads PR context from either GitHub Actions env vars or CLI flags, runs the three checks, and posts one comment (or prints it in `--dry-run`). Coverage runs first (cheap, no network); support runs second only on assertions that passed coverage; NPOV runs in parallel with coverage. **Content-hash-keyed caching is deferred past MVP** — the reviewer runs every check fresh. Anthropic's prompt caching (5-min TTL on the `cached_system_context` block) gives most of the cost benefit with zero implementation effort; cross-run content caching is a future optimization, not Phase 0 scope.
+**Architecture:** Three independent check modules share a small LLM client wrapper (`scripts/reviewer/llm.ts`) that pins the model and temperature, applies prompt caching on every stable system block (per-check system prompt + the editorial-principles doc), and returns structured findings. The entry point (`scripts/reviewer/index.ts`) reads PR context from either GitHub Actions env vars or CLI flags, runs the three checks, and posts one comment (or prints it in `--dry-run`). Coverage runs first (cheap, no network); support runs second only on assertions that passed coverage; NPOV runs in parallel with coverage. **Content-hash-keyed caching is deferred past MVP** — the reviewer runs every check fresh. Anthropic's prompt caching (5-min TTL on the cached system blocks) gives most of the cost benefit with zero implementation effort; cross-run content caching is a future optimization, not Phase 0 scope.
+
+**Methodology provenance — learning from wikidata-SIFT:** this reviewer adopts three load-bearing patterns from the sibling project `wikidata-SIFT` (open-graph-next/wikidata-SIFT, 500-edit labeled evaluation, 2026-04). Where Phase 6's earlier draft diverged from SIFT, SIFT wins; the gaps closed in this plan are:
+
+1. **Six-class verdict ordinal** replaces the `info | warn | error` severity tri-level on every finding: `verified-high | verified-low | plausible | unverifiable | suspect | incorrect`. SIFT's core insight — *"failing to find a source is not the same as the source not existing"* — demands a vocabulary that distinguishes `unverifiable` (source silent or unreachable) from `incorrect` (source directly contradicts prose). This matters most on the support check but is applied uniformly across checks so the composer and downstream logs have one schema. NPOV findings will in practice be `suspect` (style) or `incorrect` (BLP failure); coverage findings typically `suspect` (unbacked/overreach) or `unverifiable` (claim partial).
+2. **Direct-quote requirement on the support check.** SIFT mandates a direct quote from fetched source content whenever a model flags support or contradiction — *"This proves you read the actual page rather than relying on assumptions."* Cheapest anti-hallucination technique in the SIFT playbook. Phase 6 adopts it for the support prompt and surfaces quotes in the composer output.
+3. **No-training-data guardrail on coverage and support.** SIFT prompts are emphatic: *"never render a verdict based solely on your training data."* Phase 6's coverage check must only use the provided claims YAML (not the model's memory of who Jackie Fielder is); the support check must only use the fetched source text (not background knowledge of the publication). Added as explicit instructions in both prompts.
+
+**What Friski does NOT need from SIFT:** the tool-calling investigation phase (we pre-fetch all sources), `web_search` and `web_fetch` infrastructure (we operate on Wayback snapshots supplied in the YAML), the blocked-domain list (Wayback sidesteps this), ensemble fanout across open-weight models (Sonnet alone is the MVP model; ensemble is a documented future upgrade), and the systematic ground-truth eval loop (Phase 6's acceptance is operator-judged on four handcrafted fixtures; a labeled corpus is future work). Also **not inherited: blind-truncation source fetching.** SIFT truncates because it runs against small open-weight models with tight context budgets; Sonnet 4.6 handles the full article without truncation, so `defaultFetch` passes the entire source text to the support check.
 
 **Tech Stack:** `@anthropic-ai/sdk`, `@octokit/rest`, native `fetch` for archive URLs, js-yaml for response parsing, existing content loaders from Phase 2.
 
@@ -40,15 +48,26 @@ npm install @anthropic-ai/sdk @octokit/rest
 ```typescript
 import type { SubjectGraph, ArticleNode } from '../../src/lib/subject-graph';
 
-export type FindingSeverity = 'info' | 'warn' | 'error';
+// SIFT 6-class ordinal. Ordered from "strongly supports" to "directly contradicts".
+// `verified-high` and `verified-low` rarely appear in emitted findings (findings are
+// problems worth surfacing), but the vocabulary is stable across checks so downstream
+// composers and logs have one schema. See architecture note for mapping per check.
+export type FindingVerdict =
+  | 'verified-high'
+  | 'verified-low'
+  | 'plausible'
+  | 'unverifiable'
+  | 'suspect'
+  | 'incorrect';
 
 export interface Finding {
   check: 'coverage' | 'support' | 'npov';
   file: string;                    // e.g., "articles/jackie-fielder.md"
   line?: number;                   // optional; if the check can point at a line
-  severity: FindingSeverity;
+  verdict: FindingVerdict;
   message: string;                 // short, actionable
   assertion?: string;              // the prose snippet being flagged, if applicable
+  quote?: string;                  // direct quote from fetched source (support check only)
 }
 
 export interface CheckContext {
@@ -78,10 +97,20 @@ The wrapper: pins model and temperature, supports prompt caching on a system blo
 ```typescript
 import Anthropic from '@anthropic-ai/sdk';
 import yaml from 'js-yaml';
+import type { FindingVerdict } from './types';
 
 export const REVIEWER_MODEL = 'claude-sonnet-4-6';
 export const REVIEWER_TEMPERATURE = 0;
 export const REVIEWER_MAX_TOKENS = 4096;
+
+const VALID_VERDICTS: ReadonlyArray<FindingVerdict> = [
+  'verified-high',
+  'verified-low',
+  'plausible',
+  'unverifiable',
+  'suspect',
+  'incorrect',
+];
 
 export interface CallOptions {
   systemPrompt: string;
@@ -90,9 +119,10 @@ export interface CallOptions {
 }
 
 export interface RawFinding {
-  severity: 'info' | 'warn' | 'error';
+  verdict: FindingVerdict;
   message: string;
   assertion?: string;
+  quote?: string;
   line?: number;
 }
 
@@ -106,7 +136,15 @@ export function makeLLMClient(apiKey: string = process.env.ANTHROPIC_API_KEY ?? 
 
   return {
     async callForFindings(opts) {
-      const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: opts.systemPrompt }];
+      // Every stable system block gets cache_control. Anthropic allows up to 4
+      // cache breakpoints per request; we use at most 2 here. Blocks below the
+      // model's minimum cacheable size (Sonnet: 1024 tokens) are a no-op —
+      // that's fine, it costs nothing to mark them.
+      const system: Anthropic.TextBlockParam[] = [{
+        type: 'text',
+        text: opts.systemPrompt,
+        cache_control: { type: 'ephemeral' },
+      }];
       if (opts.cachedSystemContext) {
         system.push({
           type: 'text',
@@ -166,13 +204,19 @@ export function parseFindings(text: string): { findings: RawFinding[]; errors: s
       errors.push(`Skipping finding without message: ${JSON.stringify(f)}`);
       continue;
     }
-    const severity = (f.severity === 'info' || f.severity === 'warn' || f.severity === 'error')
-      ? f.severity
-      : 'warn';
+    // Fall back to `plausible` (the middle/ambiguous verdict) when the model
+    // emits something we don't recognize. This is a deliberately soft default:
+    // unrecognized verdicts should surface to the reviewer, not be silently
+    // dropped, but shouldn't be escalated to `suspect` or `incorrect` either.
+    const verdict: FindingVerdict =
+      typeof f.verdict === 'string' && (VALID_VERDICTS as readonly string[]).includes(f.verdict)
+        ? (f.verdict as FindingVerdict)
+        : 'plausible';
     findings.push({
-      severity,
+      verdict,
       message: f.message,
       assertion: typeof f.assertion === 'string' ? f.assertion : undefined,
+      quote: typeof f.quote === 'string' ? f.quote : undefined,
       line: typeof f.line === 'number' ? f.line : undefined,
     });
   }
@@ -287,25 +331,41 @@ import { describe, expect, test } from 'vitest';
 import { parseFindings } from '../../scripts/reviewer/llm';
 
 describe('parseFindings', () => {
-  test('parses fenced YAML array', () => {
-    const text = '```yaml\n- severity: warn\n  message: "Missing claim for Fielder"\n```';
+  test('parses fenced YAML array with SIFT verdict', () => {
+    const text = '```yaml\n- verdict: suspect\n  message: "Missing claim for Fielder"\n```';
     const { findings, errors } = parseFindings(text);
     expect(findings).toHaveLength(1);
     expect(findings[0]!.message).toBe('Missing claim for Fielder');
-    expect(findings[0]!.severity).toBe('warn');
+    expect(findings[0]!.verdict).toBe('suspect');
     expect(errors).toEqual([]);
   });
 
   test('parses findings key form', () => {
-    const text = 'findings:\n  - message: "x"\n    severity: error';
+    const text = 'findings:\n  - message: "x"\n    verdict: incorrect';
     const { findings } = parseFindings(text);
-    expect(findings[0]!.severity).toBe('error');
+    expect(findings[0]!.verdict).toBe('incorrect');
   });
 
-  test('defaults severity to warn when omitted or invalid', () => {
-    const text = '- message: "y"';
+  test('defaults verdict to plausible when omitted or invalid', () => {
+    const text = '- message: "y"\n- verdict: nonsense\n  message: "z"';
     const { findings } = parseFindings(text);
-    expect(findings[0]!.severity).toBe('warn');
+    expect(findings[0]!.verdict).toBe('plausible');
+    expect(findings[1]!.verdict).toBe('plausible');
+  });
+
+  test('preserves direct quote from support-check findings', () => {
+    const text = '- verdict: incorrect\n  message: "Source contradicts"\n  assertion: "won by landslide"\n  quote: "won the runoff 52-48"';
+    const { findings } = parseFindings(text);
+    expect(findings[0]!.quote).toBe('won the runoff 52-48');
+    expect(findings[0]!.assertion).toBe('won by landslide');
+  });
+
+  test('accepts all six SIFT verdict values', () => {
+    const verdicts = ['verified-high', 'verified-low', 'plausible', 'unverifiable', 'suspect', 'incorrect'];
+    for (const v of verdicts) {
+      const { findings } = parseFindings(`- verdict: ${v}\n  message: "x"`);
+      expect(findings[0]!.verdict).toBe(v);
+    }
   });
 
   test('returns errors for unparseable YAML', () => {
@@ -323,7 +383,7 @@ describe('parseFindings', () => {
 **Step 6: Run tests**
 
 Run: `npm test -- reviewer/llm`
-Expected: all 5 tests pass.
+Expected: all 7 tests pass.
 
 **Step 7: Commit**
 
@@ -348,17 +408,33 @@ export const COVERAGE_SYSTEM = `You are an editorial reviewer for Friski, a stru
 
 For each factual assertion in the article prose, determine whether it is backed by at least one structured claim on one of the subjects the article references.
 
+**Evidence discipline (non-negotiable):**
+- Use ONLY the claims provided in the "Referenced subjects" YAML below as your basis for what is "backed."
+- Do NOT rely on your training data or background knowledge about any of these subjects, people, or events. You may happen to "know" that a politician held a position or that an event occurred, but if it is not in the provided claims YAML, it is NOT backed for the purposes of this check.
+- The goal is to flag assertions that the wiki's own structured data cannot support — not to fact-check the world.
+
+**What to flag:**
 - A "factual assertion" is a sentence or clause that states something about the world as if it were fact (dates, positions held, relationships, events, attributions).
 - Opinion and characterization that a cited source itself voices — attributed clearly in the prose — is NOT a factual assertion Friski must back with a claim. (The source-support check handles that.)
 - Prose may ASSERT MORE than any claim supports (overreach). Flag these.
 - Prose may assert something the subject has no claim for. Flag these.
 
-Return findings as a YAML array. Each finding has:
-  - assertion: short quote from the prose
-  - message: what's wrong (missing claim, overreach, etc.)
-  - severity: 'warn' for unbacked or overreached; 'info' for borderline cases worth a look
+**Verdict vocabulary (SIFT 6-class ordinal):**
+Each finding must carry a \`verdict\` from this set:
+  - \`suspect\` — a factual assertion in the prose has no matching claim in the YAML, OR the prose overreaches beyond what the claim actually says
+  - \`unverifiable\` — a claim exists on the right subject but is partial/ambiguous relative to the prose; worth flagging as "claim needs strengthening before this prose is defensible"
+  - \`incorrect\` — the prose asserts something that directly contradicts an existing claim (rare; most mismatches are \`suspect\` or \`unverifiable\`)
+  - \`plausible\` — borderline cases you want the reviewer to look at but are not confident are wrong
 
-If every assertion is properly backed, return an empty array.
+Do NOT emit \`verified-high\` or \`verified-low\` findings on this check — findings are problems worth surfacing, not confirmations.
+
+**Output format:**
+Return findings as a YAML array. Each finding:
+  - assertion: short quote from the prose
+  - verdict: one of the four values above
+  - message: what's wrong (missing claim, overreach, etc.) — one sentence, actionable
+
+If every assertion is properly backed by the provided claims, return an empty array.
 
 Output ONLY the YAML, wrapped in \`\`\`yaml ... \`\`\` fences. No prose before or after.`;
 
@@ -419,7 +495,7 @@ export async function runCoverageCheck(
   const findings: Finding[] = raw.map((r) => ({
     check: 'coverage' as const,
     file: ctx.articleFile,
-    severity: r.severity,
+    verdict: r.verdict,
     message: r.message,
     assertion: r.assertion,
     line: r.line,
@@ -437,7 +513,9 @@ import { runCoverageCheck } from '../../scripts/reviewer/checks/coverage';
 import type { LLMClient } from '../../scripts/reviewer/llm';
 import type { CheckContext } from '../../scripts/reviewer/types';
 
-function mockLLM(findings: Array<{ severity: 'warn' | 'error' | 'info'; message: string; assertion?: string }>): LLMClient {
+import type { FindingVerdict } from '../../scripts/reviewer/types';
+
+function mockLLM(findings: Array<{ verdict: FindingVerdict; message: string; assertion?: string }>): LLMClient {
   return {
     callForFindings: async () => ({ findings, errors: [] }),
   };
@@ -464,13 +542,14 @@ function fakeContext(): CheckContext {
 }
 
 describe('runCoverageCheck', () => {
-  test('propagates findings with check=coverage and file from context', async () => {
-    const llm = mockLLM([{ severity: 'warn', message: 'Missing claim for X', assertion: 'X happened' }]);
+  test('propagates findings with check=coverage, file from context, and SIFT verdict', async () => {
+    const llm = mockLLM([{ verdict: 'suspect', message: 'Missing claim for X', assertion: 'X happened' }]);
     const result = await runCoverageCheck(fakeContext(), llm);
     expect(result.check).toBe('coverage');
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]!.file).toBe('articles/test.md');
     expect(result.findings[0]!.check).toBe('coverage');
+    expect(result.findings[0]!.verdict).toBe('suspect');
   });
 
   test('empty findings when LLM returns empty', async () => {
@@ -510,16 +589,32 @@ export const SUPPORT_SYSTEM = `You are an editorial reviewer for Friski. Your jo
 
 Given a prose excerpt that cites a specific source, plus the fetched text of that source, judge whether the source actually supports the cited assertion.
 
+**Evidence discipline (non-negotiable):**
+- Use ONLY the fetched source text provided below as your basis for what the source says. Do NOT rely on training-data memory of the publication, the reporter, the subject, or the event. If the fact is not in the fetched text in front of you, the source does not support it — full stop.
+- Every finding that claims "the source says X" or "the source does not say X" MUST include a direct quote from the fetched text in the \`quote\` field. This is mandatory; a finding without a quote is invalid. Quote verbatim — do not paraphrase into the \`quote\` field. (If the source is genuinely silent on the assertion, quote the most nearly-relevant passage you can find, or leave \`quote\` empty and say "source silent" in the message — silence is evidence of absence only when you have read the whole text.)
+
+**What to flag:**
 - A source supports an assertion if its text makes the same (or a broader) claim.
 - A source fails to support if it's silent on the assertion, implies something weaker, or contradicts it.
 - Overreach ("the source says X; the prose says MORE than X") is a flag.
 
-Return findings as a YAML array. Each finding:
-  - assertion: the specific prose claim
-  - message: what the source does or doesn't say
-  - severity: 'warn' for mismatches/overreaches; 'error' if the source actively contradicts the prose
+**Verdict vocabulary (SIFT 6-class ordinal):**
+Each finding must carry a \`verdict\` from this set:
+  - \`incorrect\` — the fetched source text directly contradicts the prose assertion. Quote the contradicting passage.
+  - \`suspect\` — the source says less than the prose claims (overreach), OR the source says something adjacent but importantly different. Quote the relevant passage.
+  - \`unverifiable\` — the source is silent on the assertion, or the fetched text is too incomplete to judge (e.g., the page was behind a paywall and only a teaser was captured). Failing to find support is NOT the same as contradiction. Use this verdict liberally rather than escalating to \`suspect\` or \`incorrect\`.
+  - \`plausible\` — borderline cases worth a reviewer's attention but not confident mismatches.
 
-Empty array if all citations are well-supported.
+Do NOT emit \`verified-high\` or \`verified-low\` findings on this check.
+
+**Output format:**
+Return findings as a YAML array. Each finding:
+  - assertion: the specific prose claim (short verbatim quote from the article)
+  - verdict: one of the four values above
+  - message: what the source does or doesn't say — one sentence, actionable
+  - quote: verbatim excerpt from the fetched source text that justifies the verdict (mandatory for \`suspect\` / \`incorrect\`; optional but encouraged for \`unverifiable\` / \`plausible\`)
+
+Empty array if all citations are well-supported by the fetched text.
 
 Output ONLY the YAML, wrapped in \`\`\`yaml ... \`\`\` fences.`;
 
@@ -530,6 +625,9 @@ export function supportUserPrompt(
   sourcePublication: string,
   sourceText: string,
 ): string {
+  // No truncation. Sonnet 4.6's 200k context handles full-article source text;
+  // wikidata-SIFT truncates to 15k/30k because it targets small open-weight
+  // models with tight context budgets. Friski does not inherit that constraint.
   return `Article file: ${articleFile}
 Cited source: ${sourceId} (${sourcePublication})
 
@@ -537,10 +635,9 @@ Cited source: ${sourceId} (${sourcePublication})
 ${articleBody}
 
 === Fetched source text ===
-${sourceText.slice(0, 30000)}
-${sourceText.length > 30000 ? '\n[truncated]' : ''}
+${sourceText}
 
-Review whether the source supports the prose assertions citing it. Return YAML findings.`;
+Review whether the source supports the prose assertions citing it. Every finding about what the source does or does not say must include a verbatim \`quote\` from the fetched text above. Return YAML findings.`;
 }
 ```
 
@@ -593,9 +690,10 @@ export async function runSupportCheck(
       findings.push({
         check: 'support',
         file: ctx.articleFile,
-        severity: r.severity,
+        verdict: r.verdict,
         message: `[${source.id}] ${r.message}`,
         assertion: r.assertion,
+        quote: r.quote,
       });
     }
   }
@@ -624,9 +722,9 @@ async function defaultFetch(url: string): Promise<string> {
 import { describe, expect, test, vi } from 'vitest';
 import { runSupportCheck } from '../../scripts/reviewer/checks/support';
 import type { LLMClient } from '../../scripts/reviewer/llm';
-import type { CheckContext } from '../../scripts/reviewer/types';
+import type { CheckContext, FindingVerdict } from '../../scripts/reviewer/types';
 
-function mockLLM(responses: Array<Array<{ severity: 'warn' | 'error' | 'info'; message: string }>>): LLMClient {
+function mockLLM(responses: Array<Array<{ verdict: FindingVerdict; message: string; quote?: string; assertion?: string }>>): LLMClient {
   let callNum = 0;
   return {
     callForFindings: async () => {
@@ -663,13 +761,33 @@ function contextWithFootnote(): CheckContext {
 }
 
 describe('runSupportCheck', () => {
-  test('prefixes findings with source id', async () => {
-    const llm = mockLLM([[{ severity: 'warn', message: 'Source does not mention the district' }]]);
+  test('prefixes findings with source id and preserves verdict + quote', async () => {
+    const llm = mockLLM([[{
+      verdict: 'unverifiable',
+      message: 'Source does not mention the district',
+      quote: 'Fielder was elected.',
+      assertion: 'Fielder represents District 9',
+    }]]);
     const fetchSource = vi.fn().mockResolvedValue('Fielder was elected.');
     const result = await runSupportCheck(contextWithFootnote(), llm, fetchSource);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]!.message).toContain('[ml-fielder]');
+    expect(result.findings[0]!.verdict).toBe('unverifiable');
+    expect(result.findings[0]!.quote).toBe('Fielder was elected.');
     expect(fetchSource).toHaveBeenCalledTimes(1);
+  });
+
+  test('passes untruncated source text to LLM', async () => {
+    const callForFindings = vi.fn().mockResolvedValue({ findings: [], errors: [] });
+    const llm: LLMClient = { callForFindings };
+    const longSource = 'x'.repeat(80_000);
+    const fetchSource = vi.fn().mockResolvedValue(longSource);
+
+    await runSupportCheck(contextWithFootnote(), llm, fetchSource);
+
+    const userPrompt = callForFindings.mock.calls[0]![0].userPrompt as string;
+    expect(userPrompt).toContain(longSource);
+    expect(userPrompt).not.toContain('[truncated]');
   });
 
   test('records fetch failure as an error, not a finding', async () => {
@@ -685,7 +803,7 @@ describe('runSupportCheck', () => {
 **Step 4: Run tests**
 
 Run: `npm test -- reviewer/support`
-Expected: 2 tests pass.
+Expected: 3 tests pass.
 
 **Step 5: Commit**
 
@@ -715,7 +833,15 @@ Review the article prose against Friski's editorial principles (provided separat
   - Synthetic consensus: stating a conclusion as fact when sources disagree
   - BLP failures: unsourced or weakly-sourced biographical claims about living people
 
-Return findings as a YAML array with fields: severity, message, assertion (prose excerpt). Empty array when the prose is clean.
+**Verdict vocabulary (SIFT 6-class ordinal, adapted for style review):**
+Each finding must carry a \`verdict\` from this set:
+  - \`incorrect\` — BLP failure: an unsourced or weakly-sourced biographical claim about a living person. These are the highest-severity NPOV findings because they carry legal and ethical risk.
+  - \`suspect\` — a clear style violation (loaded language, unattributed advocacy, first-person voice, synthetic consensus). The reviewer should expect to rewrite the prose.
+  - \`plausible\` — borderline phrasing that a human reviewer should look at but might reasonably keep.
+
+Do NOT emit \`verified-high\`, \`verified-low\`, or \`unverifiable\` findings on this check — NPOV findings are problems in the prose, not uncertainty about facts.
+
+Return findings as a YAML array with fields: verdict, message, assertion (prose excerpt being flagged). Empty array when the prose is clean.
 
 Output ONLY the YAML, wrapped in \`\`\`yaml ... \`\`\` fences.`;
 
@@ -749,7 +875,7 @@ export async function runNpovCheck(
   const findings: Finding[] = raw.map((r) => ({
     check: 'npov' as const,
     file: ctx.articleFile,
-    severity: r.severity,
+    verdict: r.verdict,
     message: r.message,
     assertion: r.assertion,
   }));
@@ -787,15 +913,16 @@ describe('runNpovCheck', () => {
     expect(call.cachedSystemContext).toContain('NPOV');
   });
 
-  test('propagates findings tagged as npov', async () => {
+  test('propagates findings tagged as npov with SIFT verdict', async () => {
     const llm: LLMClient = {
       callForFindings: async () => ({
-        findings: [{ severity: 'warn', message: 'Loaded language: "notorious"', assertion: 'a notorious developer' }],
+        findings: [{ verdict: 'suspect', message: 'Loaded language: "notorious"', assertion: 'a notorious developer' }],
         errors: [],
       }),
     };
     const result = await runNpovCheck(fakeContext('The notorious developer...'), llm);
     expect(result.findings[0]!.check).toBe('npov');
+    expect(result.findings[0]!.verdict).toBe('suspect');
     expect(result.findings[0]!.message).toMatch(/loaded/i);
   });
 });
@@ -831,7 +958,7 @@ git commit -m "feat: reviewer NPOV check with cached editorial-principles contex
 **Step 1: Create `scripts/reviewer/compose.ts`**
 
 ```typescript
-import type { ReviewResult, CheckResult } from './types';
+import type { ReviewResult, CheckResult, FindingVerdict } from './types';
 
 const CHECK_LABEL: Record<CheckResult['check'], string> = {
   coverage: 'Claim coverage',
@@ -839,10 +966,26 @@ const CHECK_LABEL: Record<CheckResult['check'], string> = {
   npov: 'NPOV',
 };
 
-const SEVERITY_ICON: Record<string, string> = {
-  info: 'ℹ',
-  warn: '⚠',
-  error: '✗',
+// Map each SIFT verdict to a display icon. Escalation runs left-to-right:
+// verified-high → verified-low → plausible → unverifiable → suspect → incorrect.
+// Findings are problems (rarely verified-*), but the mapping covers all six for
+// completeness and for future positive-signal reporting.
+const VERDICT_ICON: Record<FindingVerdict, string> = {
+  'verified-high': '✅',
+  'verified-low': '☑',
+  plausible: 'ℹ',
+  unverifiable: '❓',
+  suspect: '⚠',
+  incorrect: '✗',
+};
+
+const VERDICT_LABEL: Record<FindingVerdict, string> = {
+  'verified-high': 'verified-high',
+  'verified-low': 'verified-low',
+  plausible: 'plausible',
+  unverifiable: 'unverifiable',
+  suspect: 'suspect',
+  incorrect: 'incorrect',
 };
 
 export function composeComment(review: ReviewResult, model: string): string {
@@ -857,10 +1000,11 @@ export function composeComment(review: ReviewResult, model: string): string {
       lines.push('✅ No findings.');
     } else {
       for (const f of r.findings) {
-        const icon = SEVERITY_ICON[f.severity] ?? '·';
+        const icon = VERDICT_ICON[f.verdict] ?? '·';
         const where = f.line ? `${f.file}:${f.line}` : f.file;
-        const quote = f.assertion ? `  \n> ${f.assertion}` : '';
-        lines.push(`- ${icon} \`${where}\` — ${f.message}${quote}`);
+        const assertion = f.assertion ? `  \n> ${f.assertion}` : '';
+        const sourceQuote = f.quote ? `  \n> > source: ${f.quote}` : '';
+        lines.push(`- ${icon} \`${where}\` · **${VERDICT_LABEL[f.verdict]}** — ${f.message}${assertion}${sourceQuote}`);
       }
       for (const e of r.errors) {
         lines.push(`- 🔧 reviewer error: ${e}`);
@@ -1041,13 +1185,13 @@ vi.mock('../../scripts/reviewer/llm', async () => {
         const isNpov = systemPrompt.includes('NPOV');
 
         if (userPrompt.includes('claim-less-assertion') && isCoverage) {
-          return { findings: [{ severity: 'warn', message: 'No claim backs this assertion', assertion: 'Fielder chairs' }], errors: [] };
+          return { findings: [{ verdict: 'suspect', message: 'No claim backs this assertion', assertion: 'Fielder chairs' }], errors: [] };
         }
         if (userPrompt.includes('overreach') && isSupport) {
-          return { findings: [{ severity: 'warn', message: 'Prose says more than source supports', assertion: 'landslide' }], errors: [] };
+          return { findings: [{ verdict: 'suspect', message: 'Prose says more than source supports', assertion: 'landslide', quote: 'won the runoff 52-48' }], errors: [] };
         }
         if (userPrompt.includes('advocacy-voice') && isNpov) {
-          return { findings: [{ severity: 'warn', message: 'Loaded language: "notorious"', assertion: 'notorious developer' }], errors: [] };
+          return { findings: [{ verdict: 'suspect', message: 'Loaded language: "notorious"', assertion: 'notorious developer' }], errors: [] };
         }
         return { findings: [], errors: [] };
       },
@@ -1117,11 +1261,11 @@ describe('composeComment', () => {
     expect(out).toMatch(/No findings/);
   });
 
-  test('renders finding with file, icon, and assertion quote', () => {
+  test('renders finding with file, verdict icon + label, and assertion quote', () => {
     const out = composeComment(
       {
         results: [
-          { check: 'coverage', findings: [{ check: 'coverage', file: 'articles/x.md', severity: 'warn', message: 'Missing claim', assertion: 'Fielder chairs Land Use' }], errors: [] },
+          { check: 'coverage', findings: [{ check: 'coverage', file: 'articles/x.md', verdict: 'suspect', message: 'Missing claim', assertion: 'Fielder chairs Land Use' }], errors: [] },
           { check: 'support', findings: [], errors: [] },
           { check: 'npov', findings: [], errors: [] },
         ],
@@ -1131,9 +1275,47 @@ describe('composeComment', () => {
       'claude-sonnet-4-6',
     );
     expect(out).toContain('⚠');
+    expect(out).toContain('suspect');
     expect(out).toContain('articles/x.md');
     expect(out).toContain('Missing claim');
     expect(out).toContain('> Fielder chairs Land Use');
+  });
+
+  test('renders source quote on support findings', () => {
+    const out = composeComment(
+      {
+        results: [
+          { check: 'coverage', findings: [], errors: [] },
+          { check: 'support', findings: [{ check: 'support', file: 'articles/x.md', verdict: 'incorrect', message: '[ml-x] Source contradicts prose', assertion: 'won by landslide', quote: 'won the runoff 52-48' }], errors: [] },
+          { check: 'npov', findings: [], errors: [] },
+        ],
+        totalFindings: 1,
+        hasErrors: false,
+      },
+      'claude-sonnet-4-6',
+    );
+    expect(out).toContain('✗');
+    expect(out).toContain('incorrect');
+    expect(out).toContain('> won by landslide');
+    expect(out).toContain('source: won the runoff 52-48');
+  });
+
+  test('renders unverifiable distinctly from suspect', () => {
+    const out = composeComment(
+      {
+        results: [
+          { check: 'coverage', findings: [], errors: [] },
+          { check: 'support', findings: [{ check: 'support', file: 'articles/x.md', verdict: 'unverifiable', message: '[ml-x] Source silent on assertion', assertion: 'Fielder was endorsed by DSA' }], errors: [] },
+          { check: 'npov', findings: [], errors: [] },
+        ],
+        totalFindings: 1,
+        hasErrors: false,
+      },
+      'claude-sonnet-4-6',
+    );
+    expect(out).toContain('❓');
+    expect(out).toContain('unverifiable');
+    expect(out).not.toContain('suspect');
   });
 });
 ```
@@ -1164,16 +1346,20 @@ git commit -m "feat: reviewer MVP with three checks, comment composer, and fixtu
 
 ## Done when
 
-- `scripts/reviewer/` contains three independent check modules (`coverage`, `support`, `npov`) plus a shared LLM client wrapper with pinned model, `temperature: 0`, and prompt caching on the editorial-principles block.
+- `scripts/reviewer/` contains three independent check modules (`coverage`, `support`, `npov`) plus a shared LLM client wrapper with pinned model, `temperature: 0`, and prompt caching on every stable system block (per-check system prompt + editorial-principles where applicable).
+- **SIFT 6-class verdict ordinal (`verified-high | verified-low | plausible | unverifiable | suspect | incorrect`) is the sole severity vocabulary across all three checks.** No finding carries an `info | warn | error` severity; the composer and all tests use the SIFT ordinal. The parser defaults unrecognized verdicts to `plausible`. Both `unverifiable` and `incorrect` are reachable and rendered distinctly in the composed comment (the "failing to find a source ≠ source contradicts" distinction must be preserved end-to-end).
+- **Support-check findings include a `quote` field** carrying a verbatim excerpt from the fetched source text. The prompt mandates a quote for `suspect` and `incorrect` verdicts; the composer renders the quote below the flagged assertion. A composer test verifies source quotes are rendered.
+- **No-training-data guardrail** is present in the coverage and support system prompts (explicit "use only the provided claims YAML / fetched source text; do not rely on training data").
+- **No truncation on the support-check source text.** `supportUserPrompt` passes the full fetched source to the LLM; Sonnet 4.6's context window handles it. A unit test on `runSupportCheck` verifies an 80,000-character source is passed through without truncation.
 - `npm run reviewer -- --dry-run` against the seed corpus produces a composed markdown comment; Luis judges the findings *actionable and honest* (not flattery, not noise). Zero findings on clean seed content is an acceptable outcome.
 - Each of the four fixture corpora in `tests/reviewer-fixtures/` triggers at least one correctly-pointed finding from the check that was designed to catch it:
-  - `claim-less-assertion` → coverage finding
-  - `overreach` → support finding
-  - `advocacy-voice` → NPOV finding
+  - `claim-less-assertion` → coverage finding with `verdict: suspect` (or `unverifiable`)
+  - `overreach` → support finding with `verdict: suspect` (or `incorrect`) and a source `quote`
+  - `advocacy-voice` → NPOV finding with `verdict: suspect`
   - `clean-baseline` → zero findings
 - The reviewer exits cleanly on: missing ANTHROPIC_API_KEY (fails fast with a clear error), LLM response that isn't valid YAML (recorded as a reviewer error, not a crash), source fetch failure (recorded as a reviewer error, check continues on other sources), missing PR context (falls back to printing the comment).
-- The composed PR comment is well-formed GitHub-flavored markdown with per-check sections, severity icons, file paths, and quoted assertions for each finding.
-- Unit tests cover the YAML parser, each individual check's orchestration (with mocked LLM), and the comment composer.
+- The composed PR comment is well-formed GitHub-flavored markdown with per-check sections, verdict icons + verdict labels, file paths, quoted assertions, and source quotes for support findings.
+- Unit tests cover the YAML parser (including all six verdict values and the `plausible` fallback), each individual check's orchestration (with mocked LLM), the untruncated-source-text pass-through on the support check, and the comment composer (including `unverifiable` rendering distinctly from `suspect`).
 - Integration tests run the full `runReview()` orchestration with a mocked LLM against each fixture corpus.
 - No test hits the live Anthropic API; the `--dry-run` smoke is an operator-run verification, not a CI step.
 - Each task committed independently.
