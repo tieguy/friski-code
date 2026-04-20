@@ -1,13 +1,12 @@
 ---
 import type { Source } from '../content-schemas';
+import { formatYmd } from '../lib/format-date';
 interface Props {
   source: Source;
   label: string;
 }
 const { source, label } = Astro.props;
-const dateText = source.date_published
-  ? new Date(source.date_published).toISOString().slice(0, 10)
-  : null;
+const dateText = formatYmd(source.date_published ? new Date(source.date_published) : null);
 ---
 <li id={`fn-${label}`}>
   <strong>{source.publication}</strong>{source.author ? `, ${source.author}` : ''}

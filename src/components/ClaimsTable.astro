@@ -1,14 +1,10 @@
 ---
 import type { Subject } from '../content-schemas';
+import { formatYmd } from '../lib/format-date';
 interface Props {
   subject: Subject;
 }
 const { subject } = Astro.props;
-
-function fmt(d: Date | null | undefined): string {
-  if (!d) return '';
-  return new Date(d).toISOString().slice(0, 10);
-}
 ---
 <table>
   <thead>
@@ -25,9 +21,9 @@ function fmt(d: Date | null | undefined): string {
         <td><code>{c.property}</code></td>
         <td><code>{c.value}</code></td>
         <td>
-          {fmt(c.start) || '—'}
+          {formatYmd(c.start) || '—'}
           {' → '}
-          {c.end ? fmt(c.end) : (c.start ? 'present' : '—')}
+          {c.end ? formatYmd(c.end) : (c.start ? 'present' : '—')}
         </td>
         <td><code>{c.source}</code></td>
       </tr>
