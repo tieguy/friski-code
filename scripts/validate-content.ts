@@ -141,12 +141,13 @@ export function validate(
 
   // 4. Build subject graph to surface footnote resolution errors
   // Run unconditionally to surface footnote errors alongside other errors.
+  const articlePathBySlug = new Map(articles.map((a) => [a.id, a.file]));
   try {
     buildSubjectGraph(subjects, articles);
   } catch (e) {
     if (e instanceof FootnoteResolutionError) {
       errors.push({
-        file: `articles/${e.articleSlug}.md`,
+        file: articlePathBySlug.get(e.articleSlug) ?? `articles/${e.articleSlug}.md`,
         rule: `footnote-${e.reason}`,
         message: e.message,
       });
