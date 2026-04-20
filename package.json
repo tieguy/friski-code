@@ -20,6 +20,8 @@
     "ensure-archived": "tsx scripts/ensure-archived.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "@octokit/rest": "^22.0.1",
     "astro": "^6.1.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
