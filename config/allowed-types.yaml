@@ -2,9 +2,13 @@
 # Q-numbers map to Wikidata; F- prefixes are Friski-local.
 # Adding a subject of a new type requires adding its P31 value here.
 allowed_types:
-  - Q5                # human
-  - Q515              # city
-  - Q43229            # organization
-  - Q1048835          # political territorial entity
-  - F-neighborhood    # Friski-local: SF neighborhood
-  - F-landmark        # Friski-local: named place without Wikidata entry
+  - Q5                  # human
+  - Q515                # city
+  - Q43229              # organization
+  - Q1048835            # political territorial entity
+  - Q1175507            # board of supervisors
+  - Q123705             # neighborhood
+  - Q11032              # newspaper
+  - F-neighborhood      # Friski-local: SF neighborhood
+  - F-landmark          # Friski-local: named place without Wikidata entry
+  - F-political-scandal # Friski-local: political scandal (no clean Wikidata P31 parent)
