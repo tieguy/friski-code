@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 72ch;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  line-height: 1.6;
+  color: #222;
+  background: #fafafa;
+}
+header, footer { padding: 0.5rem 0; }
+header nav a { color: #333; text-decoration: none; font-weight: 600; }
+footer { border-top: 1px solid #eee; margin-top: 3rem; color: #666; font-size: 0.9em; }
+main { margin: 2rem 0; }
+h1 { margin-top: 0; }
+h2 { font-size: 1.25rem; margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+code { background: #f4f4f4; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
+a { color: #0366d6; }
+a:focus { outline: 2px solid #0366d6; outline-offset: 2px; }
+.sources-cited { margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; }
+.sources-cited h2 { font-size: 1rem; }
+.subjects-referenced { color: #555; font-size: 0.9em; }
