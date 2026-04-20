@@ -60,13 +60,13 @@ describe('validate-content (rule coverage)', () => {
   test('flags missing archive.url via schema validation', () => {
     const root = makeCorpus(['_invalid-missing-archive-url.yaml'], []);
     const result = validate(root, allowedTypesPath);
-    expect(result.errors.some((e) => e.rule === 'schema')).toBe(true);
+    expect(result.errors.some((e) => e.rule.includes('archive.url') || e.rule === 'schema')).toBe(true);
   });
 
   test('flags tier out of range via schema validation', () => {
     const root = makeCorpus(['_invalid-tier-out-of-range.yaml'], []);
     const result = validate(root, allowedTypesPath);
-    expect(result.errors.some((e) => e.rule === 'schema')).toBe(true);
+    expect(result.errors.some((e) => e.rule.includes('tier') || e.rule === 'schema')).toBe(true);
   });
 
   test('flags article referencing nonexistent subject', () => {

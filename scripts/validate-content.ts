@@ -189,7 +189,7 @@ function loadMarkdownDir(dir: string): Array<{ file: string; frontmatter: unknow
 function zodErrorsToValidation(file: string, rule: string, error: ZodError): ValidationError[] {
   return error.issues.map((issue) => ({
     file,
-    rule,
+    rule: issue.path.length > 0 ? `${rule}.${issue.path.join('.')}` : rule,
     message: `${issue.path.join('.')}: ${issue.message}`,
   }));
 }
