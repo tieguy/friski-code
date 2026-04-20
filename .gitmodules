@@ -1,0 +1,3 @@
+[submodule "src/content/wiki"]
+	path = src/content/wiki
+	url = https://github.com/tieguy/frisco-wiki.git
