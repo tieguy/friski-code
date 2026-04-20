@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import yaml from 'js-yaml';
 import matter from 'gray-matter';
+import { basename } from 'node:path';
 import { buildSubjectGraph } from '../src/lib/subject-graph';
-import { subjectSchema, articleSchema } from '../src/content-schemas';
+import { subjectSchema, articleSchema, resolveArticle } from '../src/content-schemas';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -22,7 +23,7 @@ function loadFixtures() {
   const articles = articleFiles.map((rel) => {
     const raw = readFileSync(join(__dirname, rel), 'utf8');
     const parsed = matter(raw);
-    const data = articleSchema.parse(parsed.data);
+    const data = resolveArticle(articleSchema.parse(parsed.data), basename(rel, '.md'));
     return { id: data.slug, data, body: parsed.content };
   });
 

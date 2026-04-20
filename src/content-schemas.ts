@@ -41,11 +41,14 @@ export const subjectSchema = z.object({
   sources: z.array(sourceSchema).min(1),
 });
 
+// Frontmatter shape: slug, primary_subject, and subjects are all optional. A
+// minimal article can write just `title`; the loader fills in the rest from
+// the filename via resolveArticle.
 export const articleSchema = z.object({
   title: z.string().min(1),
-  slug: slug,
+  slug: slug.optional(),
   primary_subject: slug.optional(),
-  subjects: z.array(slug).min(1),
+  subjects: z.array(slug).min(1).optional(),
   scope: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
 });
@@ -53,4 +56,45 @@ export const articleSchema = z.object({
 export type Source = z.infer<typeof sourceSchema>;
 export type Claim = z.infer<typeof claimSchema>;
 export type Subject = z.infer<typeof subjectSchema>;
-export type Article = z.infer<typeof articleSchema>;
+
+// Raw shape as authored in frontmatter (with optional slug/subjects/primary).
+export type ArticleFrontmatter = z.infer<typeof articleSchema>;
+
+// Resolved shape after defaulting — what the graph builder, pages, and
+// validator rules consume. All three identity fields are always present here.
+export interface Article {
+  title: string;
+  slug: string;
+  primary_subject: string;
+  subjects: string[];
+  scope: string[];
+  tags: string[];
+}
+
+/**
+ * Fill in slug/primary_subject/subjects defaults so the rest of the pipeline
+ * doesn't need to handle their absence.
+ *
+ * Rules:
+ *   - slug defaults to `fallbackSlug` (typically the filename without `.md`).
+ *   - If neither subjects nor primary_subject is set: both default to [slug].
+ *   - If only primary_subject is set: subjects becomes [primary_subject].
+ *   - If only subjects is set: primary_subject becomes subjects[0].
+ *   - If both are set: used verbatim; the validator checks primary ∈ subjects.
+ */
+export function resolveArticle(
+  raw: ArticleFrontmatter,
+  fallbackSlug: string,
+): Article {
+  const slugVal = raw.slug ?? fallbackSlug;
+  const subjects = raw.subjects ?? (raw.primary_subject ? [raw.primary_subject] : [slugVal]);
+  const primary_subject = raw.primary_subject ?? subjects[0]!;
+  return {
+    title: raw.title,
+    slug: slugVal,
+    primary_subject,
+    subjects,
+    scope: raw.scope,
+    tags: raw.tags,
+  };
+}

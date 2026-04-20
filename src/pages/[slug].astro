@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
-import type { Article } from '../content-schemas';
+import { basename } from 'node:path';
+import { resolveArticle, type ArticleFrontmatter } from '../content-schemas';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Citation from '../components/Citation.astro';
 import SubjectRef from '../components/SubjectRef.astro';
@@ -8,14 +9,16 @@ import { getGraph } from '../lib/get-graph';
 
 export async function getStaticPaths() {
   const articles = await getCollection('articles');
-  return articles.map((entry) => ({
-    params: { slug: (entry.data as Article).slug },
-    props: { entry },
-  }));
+  return articles.map((entry) => {
+    const resolved = resolveArticle(entry.data as ArticleFrontmatter, basename(entry.id));
+    return {
+      params: { slug: resolved.slug },
+      props: { entry, resolved },
+    };
+  });
 }
 
-const { entry } = Astro.props;
-const data = entry.data as Article;
+const { entry, resolved: data } = Astro.props;
 const graph = await getGraph();
 const node = graph.articles.get(data.slug);
 const { Content } = await render(entry);

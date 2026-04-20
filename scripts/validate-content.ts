@@ -1,12 +1,12 @@
 #!/usr/bin/env tsx
 // Imperative shell: content validator CLI. Loads fixtures from filesystem, validates via Zod + subject-graph invariants.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import matter from 'gray-matter';
 import { ZodError } from 'zod';
-import { subjectSchema, articleSchema, type Subject, type Article } from '../src/content-schemas';
+import { subjectSchema, articleSchema, resolveArticle, type Subject, type Article } from '../src/content-schemas';
 import { buildSubjectGraph, FootnoteResolutionError } from '../src/lib/subject-graph';
 
 interface AllowedTypesFile {
@@ -102,7 +102,7 @@ export function validate(
       errors.push(...zodErrorsToValidation(file, 'schema', parsed.error));
       continue;
     }
-    const data = parsed.data;
+    const data = resolveArticle(parsed.data, basename(file, '.md'));
 
     // article.subjects are unique
     if (new Set(data.subjects).size !== data.subjects.length) {
@@ -113,8 +113,8 @@ export function validate(
       });
     }
 
-    // primary_subject (if set) is in subjects[]
-    if (data.primary_subject && !data.subjects.includes(data.primary_subject)) {
+    // primary_subject is in subjects[] (always set after resolve, so always checked)
+    if (!data.subjects.includes(data.primary_subject)) {
       errors.push({
         file,
         rule: 'primary-subject-in-subjects',
