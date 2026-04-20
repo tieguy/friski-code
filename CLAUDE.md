@@ -6,7 +6,7 @@ Last verified: 2026-04-20
 
 ## Status
 
-Phase 2 complete (schemas + graph + validator). The repo has an Astro 6 skeleton with registered content collections (subjects, articles), a canonical Zod schema module, a GFM footnote parser, a working `buildSubjectGraph` implementation, and a standalone validator CLI (`npm run validate`) covered by 25 Vitest tests. No reviewer or deploy pipeline yet — those land in Phases 3–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+Phase 3 complete (render pipeline). On top of Phase 2's schemas/graph/validator, the site now renders: a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`). `astro build` produces a static site from the fixture wiki. No reviewer or deploy pipeline yet — those land in Phases 4–5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
 
 ### Key code locations
 
@@ -17,11 +17,19 @@ Phase 2 complete (schemas + graph + validator). The repo has an Astro 6 skeleton
 - **Content validator CLI:** `scripts/validate-content.ts` exports `validate(contentRoot, allowedTypesPath)` and runs via `npm run validate`. Rule names in its `ValidationError.rule` field (`schema.*`, `subject-id-unique`, `source-id-unique-within-subject`, `claim-source-resolves`, `p31-present`, `p31-allowlist`, `article-subjects-unique`, `primary-subject-in-subjects`, `no-orphan-subjects`, `footnote-no-match`, `footnote-ambiguous`) are a **stable API** — CI and humans grep for them, so rename only with care. (Note: `schema.*` is a prefix; field-level errors emit e.g. `schema.sources.0.tier` or `schema.sources.0.archive.url`.)
 - **P31 allowlist:** `config/allowed-types.yaml` — adding a subject of a new type requires adding its P31 value here.
 - **Wiki content submodule:** `src/content/wiki/` → `https://github.com/tieguy/frisco-wiki.git`. Subjects and articles live in the submodule, not this repo.
+- **Graph access at render time:** `src/lib/get-graph.ts` exports `getGraph(): Promise<SubjectGraph>` — module-level cached imperative shell that calls `getCollection('subjects' | 'articles')` and hands off to `buildSubjectGraph`. **All pages and components read the graph via `getGraph()`**; do not re-invoke `buildSubjectGraph` from pages, and do not call `getCollection` directly from components. The cache is per-module-instance (fine for Astro's static build; revisit if SSR is added).
+- **Pages and components:** `src/layouts/BaseLayout.astro` (shared HTML shell), `src/components/{SubjectRef,Citation,ClaimsTable}.astro` (prose/subject rendering primitives), `src/pages/[slug].astro` (article renderer), `src/pages/subjects/[id].astro` (subject page: claims table + backlinks), `src/pages/index.astro` (content listing), `src/pages/index/current-supervisors.astro` (query-derived index — pattern for future derived indices). Site CSS lives in `public/style.css`.
 
-### Architectural constraints introduced in Phase 2
+### Architectural constraints (Phase 2–3)
 
 - **FCIS (functional core, imperative shell).** Pure logic (schemas, footnote parser, graph builder) lives in `src/content-schemas.ts` and `src/lib/*` with no I/O. The imperative shell (`scripts/validate-content.ts`, `src/content.config.ts`) handles filesystem reads and framework wiring. Preserve this split when adding new logic — new pure code goes in `src/lib/`, not in scripts.
 - **Zod v3 / v4 seam.** This project depends on standalone `zod@3`, but `astro:content`'s type surface expects an `astro/zod` (v4) schema. `src/content.config.ts` narrow-casts via `BaseSchema` at the single call site. Runtime validation works (safeParseAsync); `astro check`/`astro build` emit a non-fatal JSON-schema-generation warning per collection. Do not pull `astro/zod` into `src/content-schemas.ts` — the standalone zod@3 module must stay importable from the validator without Astro's runtime.
+  - Downstream consequence: `entry.data` from `getCollection` is typed `unknown` in this project, so `src/lib/get-graph.ts` and `src/pages/[slug].astro` use targeted `as Subject` / `as Article` casts. This is the same root cause as the `BaseSchema` cast above — treat it as a known seam, not a smell.
+
+### Phase 3 gotchas
+
+- **Stale content cache between builds.** Astro caches content-collection output under `node_modules/.astro`. When smoke-testing with a swapped fixture (copy fixtures → build → revert submodule), `rm -rf node_modules/.astro` between builds is required or the cache masks the new inputs. Documented in `plans/implementation-plans/2026-04-20-mvp/phase_03.md`.
+- **Lighthouse accessibility check is operator-followup.** Flatpak Chrome on the dev environment doesn't support headless automation, so accessibility scoring isn't part of the automated phase verification; run Lighthouse manually when vetting a deploy candidate.
 
 ## Normative references
 
