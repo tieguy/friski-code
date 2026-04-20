@@ -1,0 +1,16 @@
+id: missing-archive-url
+label: Missing Archive URL
+description: Subject with source missing archive.url field.
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: bad-archive
+sources:
+  - id: bad-archive
+    url: https://example.org/
+    publication: Example
+    tier: 1
+    archive:
+      method: wayback
+      access: public

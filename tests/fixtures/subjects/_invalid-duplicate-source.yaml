@@ -1,0 +1,25 @@
+id: dup-source
+label: Dup Source
+description: Subject with duplicate source IDs.
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: dup
+sources:
+  - id: dup
+    url: https://a.example.org/
+    publication: A
+    tier: 1
+    archive:
+      url: https://web.archive.org/web/2024/https://a.example.org/
+      method: wayback
+      access: public
+  - id: dup
+    url: https://b.example.org/
+    publication: B
+    tier: 1
+    archive:
+      url: https://web.archive.org/web/2024/https://b.example.org/
+      method: wayback
+      access: public

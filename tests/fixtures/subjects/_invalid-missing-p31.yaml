@@ -1,0 +1,17 @@
+id: no-p31-subject
+label: Missing P31
+description: This subject has no instance-of claim.
+claims:
+  - id: C001
+    property: P39
+    value: F-SF-D9-Supervisor
+    source: some-source
+sources:
+  - id: some-source
+    url: https://example.org/
+    publication: Example
+    tier: 3
+    archive:
+      url: https://web.archive.org/web/2024/https://example.org/
+      method: wayback
+      access: public

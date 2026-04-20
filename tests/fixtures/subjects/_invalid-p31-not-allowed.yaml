@@ -1,0 +1,17 @@
+id: bad-type
+label: Bad Type
+description: P31 value not in allowed-types.yaml.
+claims:
+  - id: C000
+    property: P31
+    value: Q999999
+    source: some-source
+sources:
+  - id: some-source
+    url: https://example.org/
+    publication: Example
+    tier: 3
+    archive:
+      url: https://web.archive.org/web/2024/https://example.org/
+      method: wayback
+      access: public

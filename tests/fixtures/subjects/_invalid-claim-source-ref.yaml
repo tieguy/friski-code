@@ -1,0 +1,17 @@
+id: dangling-source
+label: Dangling Source Ref
+description: Claim cites source that is not defined.
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: nonexistent
+sources:
+  - id: actual-source
+    url: https://example.org/
+    publication: Example
+    tier: 3
+    archive:
+      url: https://web.archive.org/web/2024/https://example.org/
+      method: wayback
+      access: public

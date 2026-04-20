@@ -14,7 +14,8 @@
     "astro": "astro",
     "typecheck": "astro check && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate": "tsx scripts/validate-content.ts"
   },
   "dependencies": {
     "astro": "^6.1.0",
@@ -31,6 +32,7 @@
     "@astrojs/check": "^0.9.8",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   }
