@@ -1,4 +1,4 @@
-import type { Article, Claim, Source, Subject } from '../content.config';
+import type { Article, Claim, Source, Subject } from '../content.schemas';
 
 // In-memory representation of the content corpus.
 // Constructed in Phase 2 by the content loader; these are the shapes.

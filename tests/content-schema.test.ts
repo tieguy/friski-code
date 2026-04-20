@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import yaml from 'js-yaml';
-import { subjectSchema } from '../src/content.config';
+import { subjectSchema } from '../src/content.schemas';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
