@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ClaimsTable from '../../components/ClaimsTable.astro';
+import { getGraph } from '../../lib/get-graph';
+
+export async function getStaticPaths() {
+  const graph = await getGraph();
+  return Array.from(graph.subjects.values()).map((subject) => ({
+    params: { id: subject.id },
+    props: { subjectId: subject.id },
+  }));
+}
+
+const { subjectId } = Astro.props;
+const graph = await getGraph();
+const subject = graph.subjects.get(subjectId)!;
+const backlinks = graph.articlesReferencing(subjectId);
+---
+<BaseLayout title={subject.label}>
+  <article>
+    <h1>{subject.label}</h1>
+    <p>{subject.description}</p>
+    {subject.wikidata_qid && (
+      <p>
+        Wikidata:{' '}
+        <a
+          href={`https://www.wikidata.org/wiki/${subject.wikidata_qid}`}
+          rel="external noopener"
+        >
+          {subject.wikidata_qid}
+        </a>
+      </p>
+    )}
+    <h2>Claims</h2>
+    <ClaimsTable subject={subject} />
+    {backlinks.length > 0 && (
+      <>
+        <h2>Articles</h2>
+        <ul>
+          {backlinks.map((a) => (
+            <li><a href={`/${a.slug}`}>{a.title}</a></li>
+          ))}
+        </ul>
+      </>
+    )}
+  </article>
+</BaseLayout>
