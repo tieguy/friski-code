@@ -4,7 +4,7 @@
 
 **Goal:** Render three page types from the subject graph — article pages (prose + resolved citations), subject pages (claims table + backlinks), and at least one query-derived index page — plus a working homepage. Static build succeeds against both the empty submodule and the fixture corpus.
 
-**Architecture:** A shared `getGraph()` helper caches one `buildSubjectGraph()` call across all page renders. Pages use `getStaticPaths` to enumerate entries from Astro collections and pre-render. Articles use Astro's default remark-gfm footnote rendering inline, plus a dedicated "Sources cited" section below the prose that renders resolved source metadata from the subject graph. Components are small and Astro-native; no UI framework at MVP.
+**Architecture:** A shared `getGraph()` helper caches one `buildSubjectGraph()` call across all page renders. Pages use `getStaticPaths` to enumerate entries from Astro collections and pre-render. Articles render footnotes via a rehype plugin that rewires GFM's auto-generated backrefs to the Citation `<li id>` entries and suppresses the default auto-footnotes section. Single source-of-truth citation rendering via a dedicated "Sources cited" section below the prose. Components are small and Astro-native; no UI framework at MVP.
 
 **Tech Stack:** Astro 6 components and layouts, Astro's built-in Markdown rendering (remark-gfm enabled by default), minimal plain CSS in `public/style.css`.
 
@@ -135,11 +135,66 @@ git commit -m "feat: base layout, site CSS, and subject graph helper"
 ## Task 2: Article rendering
 
 **Files:**
+- Create: `src/lib/rehype-rewire-footnotes.ts`
 - Create: `src/components/Citation.astro`
 - Create: `src/components/SubjectRef.astro`
 - Create: `src/pages/[slug].astro`
+- Update: `astro.config.mjs`
 
-**Step 1: Create `src/components/SubjectRef.astro`**
+**Step 1: Create `src/lib/rehype-rewire-footnotes.ts`**
+
+Create a rehype plugin that:
+1. Rewrites all `href="#user-content-fn-X"` to `href="#fn-X"` on anchor elements in `<sup>` tags
+2. Rewrites `href="#user-content-fnref-X"` backrefs similarly
+3. Strips/removes the `<section data-footnotes>` auto-generated block
+
+```typescript
+// Functional core: rehype plugin that rewires GFM auto-footnotes to point at our Citation <li> ids.
+import type { Root, Element } from 'hast';
+import { visit } from 'unist-util-visit';
+
+export function rehypeRewireFootnotes() {
+  return (tree: Root) => {
+    // 1. Rewrite anchor href prefixes
+    visit(tree, 'element', (node: Element) => {
+      if (node.tagName !== 'a') return;
+      const href = node.properties?.href;
+      if (typeof href !== 'string') return;
+      if (href.startsWith('#user-content-fn-')) {
+        node.properties!.href = '#fn-' + href.slice('#user-content-fn-'.length);
+      } else if (href.startsWith('#user-content-fnref-')) {
+        node.properties!.href = '#fnref-' + href.slice('#user-content-fnref-'.length);
+      }
+    });
+
+    // 2. Strip the auto-generated <section data-footnotes>
+    tree.children = tree.children.filter((child) => {
+      if (child.type !== 'element') return true;
+      const el = child as Element;
+      if (el.tagName !== 'section') return true;
+      const dataFootnotes = el.properties?.dataFootnotes;
+      // hast represents `data-footnotes` as `dataFootnotes` property
+      return dataFootnotes === undefined;
+    });
+  };
+}
+```
+
+Then update `astro.config.mjs` to wire in the plugin:
+
+```javascript
+import { defineConfig } from 'astro/config';
+import { rehypeRewireFootnotes } from './src/lib/rehype-rewire-footnotes.ts';
+
+export default defineConfig({
+  site: 'https://frisco.wiki',
+  markdown: {
+    rehypePlugins: [rehypeRewireFootnotes],
+  },
+});
+```
+
+**Step 2: Create `src/components/SubjectRef.astro`**
 
 ```astro
 ---
@@ -152,7 +207,7 @@ const { subjectId, label } = Astro.props;
 <a href={`/subjects/${subjectId}`}>{label ?? subjectId}</a>
 ```
 
-**Step 2: Create `src/components/Citation.astro`**
+**Step 3: Create `src/components/Citation.astro`**
 
 ```astro
 ---
@@ -177,7 +232,7 @@ const dateText = source.date_published
 </li>
 ```
 
-**Step 3: Create `src/pages/[slug].astro`**
+**Step 4: Create `src/pages/[slug].astro`**
 
 ```astro
 ---
@@ -241,6 +296,7 @@ Temporarily copy fixtures into the submodule working tree:
 cp tests/fixtures/subjects/jackie-fielder.yaml src/content/wiki/subjects/
 cp tests/fixtures/subjects/sf-board-of-supervisors.yaml src/content/wiki/subjects/
 cp tests/fixtures/articles/jackie-fielder.md src/content/wiki/articles/
+rm -rf node_modules/.astro dist
 npm run build
 ```
 
@@ -369,6 +425,7 @@ const backlinks = graph.articlesReferencing(subjectId);
 cp tests/fixtures/subjects/jackie-fielder.yaml src/content/wiki/subjects/
 cp tests/fixtures/subjects/sf-board-of-supervisors.yaml src/content/wiki/subjects/
 cp tests/fixtures/articles/jackie-fielder.md src/content/wiki/articles/
+rm -rf node_modules/.astro dist
 npm run build
 ```
 
@@ -505,6 +562,7 @@ cp tests/fixtures/subjects/*.yaml src/content/wiki/subjects/
 cp tests/fixtures/articles/*.md src/content/wiki/articles/
 # Skip any files with `_invalid-` prefix:
 rm -f src/content/wiki/subjects/_invalid-*.yaml src/content/wiki/articles/_invalid-*.md
+rm -rf node_modules/.astro dist
 npm run build
 ```
 
