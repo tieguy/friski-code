@@ -2,6 +2,7 @@
 // Imperative shell: content validator CLI. Loads fixtures from filesystem, validates via Zod + subject-graph invariants.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import matter from 'gray-matter';
 import { ZodError } from 'zod';
@@ -212,6 +213,14 @@ function main() {
   process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule = (() => {
+  try {
+    return fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+  } catch {
+    return false;
+  }
+})();
+
+if (isMainModule) {
   main();
 }
