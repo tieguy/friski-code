@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { mkdtempSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -60,13 +60,13 @@ describe('validate-content (rule coverage)', () => {
   test('flags missing archive.url via schema validation', () => {
     const root = makeCorpus(['_invalid-missing-archive-url.yaml'], []);
     const result = validate(root, allowedTypesPath);
-    expect(result.errors.some((e) => e.rule.includes('archive.url') || e.rule === 'schema')).toBe(true);
+    expect(result.errors.some((e) => e.rule.includes('archive.url'))).toBe(true);
   });
 
   test('flags tier out of range via schema validation', () => {
     const root = makeCorpus(['_invalid-tier-out-of-range.yaml'], []);
     const result = validate(root, allowedTypesPath);
-    expect(result.errors.some((e) => e.rule.includes('tier') || e.rule === 'schema')).toBe(true);
+    expect(result.errors.some((e) => e.rule.includes('tier'))).toBe(true);
   });
 
   test('flags article referencing nonexistent subject', () => {
@@ -91,13 +91,6 @@ describe('validate-content (rule coverage)', () => {
       ['jackie-fielder.yaml', '_ambiguity-sf-bos.yaml'],
       ['_invalid-footnote-ambiguous.md'],
     );
-    // The fixture file _ambiguity-sf-bos.yaml has id: sf-board-of-supervisors
-    // so it will be copied as _ambiguity-sf-bos.yaml in the temp dir.
-    // Copy it to the expected name for the article reference to work.
-    const srcPath = join(root, 'subjects', '_ambiguity-sf-bos.yaml');
-    const destPath = join(root, 'subjects', 'sf-board-of-supervisors.yaml');
-    copyFileSync(srcPath, destPath);
-    rmSync(srcPath);
     const result = validate(root, allowedTypesPath);
     expect(result.errors.some((e) => e.rule === 'footnote-ambiguous')).toBe(true);
   });
