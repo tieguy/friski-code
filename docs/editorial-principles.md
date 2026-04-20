@@ -39,6 +39,19 @@ LLM reviewer uses to flag NPOV problems in prose.
    policies are correct. First-person or exhortative language is a reviewer
    flag.
 
+8. **Cite at sentence scope; paragraph-trailing is a shorthand.** A
+   citation placed at the end of a sentence supports that sentence. A
+   citation at the end of a paragraph — with no other citations inside
+   the paragraph — is accepted shorthand for "this source supports every
+   sentence in the paragraph." When a paragraph draws from multiple
+   sources, break out inline citations at each source boundary; a
+   citation's scope extends backward to the previous citation or
+   paragraph start, whichever is closer. If a source only covers part of
+   a sentence — or only part of a paragraph that also contains unsupported
+   claims — split the citation or add one for the unsupported span.
+   The same `[^foo]` label can be referenced multiple times in one
+   article; reuse is cleaner than inventing `[^foo-again]`.
+
 ## Sourcing tiers
 
 Every `source.tier` must be in `{1, 2, 3, 4}`. Tiers do not constrain which
