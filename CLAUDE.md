@@ -6,7 +6,22 @@ Last verified: 2026-04-20
 
 ## Status
 
-Phase 4 complete (authoring tooling + editorial docs). Phase 3's render pipeline ships a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`); `astro build` produces a static site from the fixture wiki. Phase 4 adds two authoring CLIs (`new-subject`, `ensure-archived`) backed by pure cores in `src/lib/` (Wikidata fetch, Wayback Save Page Now client), plus extracted editorial docs (`docs/editorial-principles.md`, `docs/archival-procedure.md`). No reviewer or deploy pipeline yet — those land in Phase 5 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+Phase 5 (seed real content) paused mid-Task-2 on 2026-04-20; resuming in a new session, proceeding to Phase 6. Phase 4 shipped authoring tooling + editorial docs. Phase 3's render pipeline ships a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`); `astro build` produces a static site from the fixture wiki. Phase 4 adds two authoring CLIs (`new-subject`, `ensure-archived`) backed by pure cores in `src/lib/` (Wikidata fetch, Wayback Save Page Now client), plus extracted editorial docs (`docs/editorial-principles.md`, `docs/archival-procedure.md`). No reviewer or deploy pipeline yet — those land in Phase 6 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+
+### Phase 5 partial state (paused 2026-04-20)
+
+Parent-repo HEAD is **54e2be7** (Phase 4 close). Uncommitted in parent: `config/allowed-types.yaml` adds 4 new P31 entries (Q1175507 board of supervisors, Q123705 neighborhood, Q11032 newspaper, F-political-scandal); a local `.env` file (gitignored) holds Archive.org S3 credentials.
+
+Submodule at `src/content/wiki` is on `main`, **3 commits ahead of origin/main** (not yet pushed): `d37aba0` (6 seed subjects — jackie-fielder, sf-board-of-supervisors, mission-district, mission-local, dpw-corruption-scandal, dbi-corruption-scandal), `30e521c` (5 article stubs), `8a50d71` (concrete Wayback snapshots for 6 of 10 source URLs, 3 still placeholder, 1 TBD).
+
+Task status: 1 (subjects) done, 3 (article stubs) done, **2 (archiving) is 6/10 complete and blocked on the Wayback rate-limit lockout described below**, 4 (build/preview/push/submodule bump/smoke) not started. Tracker item `#25` remains `in_progress`. See memory file `phase-5-partial-state.md` for the task-by-task replay needed to resume.
+
+### Phase 5 learnings (operator + CI-design implications)
+
+- **Wayback SPN is no longer anonymously submittable.** `docs/archival-procedure.md` still claims "anonymous 3/min" — that is stale and must be corrected before publishing docs. See memory `wayback-spn-auth-required.md`.
+- **Authenticated SPN trips an IP-level TCP-refuse after ~3-5 rapid submits**, clearing in minutes. Implication for Phase 6 CI: the reviewer GitHub Action **should not submit captures**. It should only validate that source URLs are either already resolved to concrete snapshots or flag placeholder URLs for operator follow-up. Details in memory `wayback-rate-limit-pattern.md`.
+- **`ensure-archived` has no availability-API preflight** (deferred Phase 4 Minor #2). It always submits, which burns quota against already-archived URLs. Phase 6 CI-wiring must decide whether to integrate this CLI or keep it strictly operator-local; leaning operator-only until a preflight is added.
+- **Phase 1-4 test fixtures use fictitious Wikidata QIDs** that happen to point at unrelated entities (e.g. `Q99524088` is a beetle taxonomy article). Schema regex can't catch this. Real production QIDs used in the Phase 5 seed corpus are captured in memory `test-fixture-qids-not-real.md`; use those — not fixture values — when writing docs or new examples.
 
 ### Key code locations
 
