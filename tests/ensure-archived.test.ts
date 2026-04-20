@@ -100,4 +100,94 @@ describe('ensureArchivedInFile', () => {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
+
+  test('persists successful captures when a later source fails', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    // Source 1: successful capture
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ job_id: 'j1' }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'success',
+          timestamp: '20260420111111',
+          original_url: 'https://missionlocal.org/success',
+        }),
+        { status: 200 },
+      ),
+    );
+    // Source 2: submit succeeds, but then throw during processing
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ job_id: 'j2' }), { status: 200 }),
+    );
+    fetchMock.mockRejectedValueOnce(new Error('Network timeout'));
+
+    const tmpRoot = mkdtempSync(join(tmpdir(), 'archival-'));
+    try {
+      const subjectPath = join(tmpRoot, 'multi-source.yaml');
+      const subject = {
+        id: 'multi-source',
+        label: 'Multi Source',
+        description: 'Test.',
+        claims: [
+          { id: 'C000', property: 'P31', value: 'Q5', source: 'src1' },
+          { id: 'C001', property: 'P31', value: 'Q5', source: 'src2' },
+        ],
+        sources: [
+          {
+            id: 'src1',
+            url: 'https://missionlocal.org/success',
+            publication: 'Mission Local',
+            tier: 1,
+            archive: {
+              url: 'https://web.archive.org/web/2/https://missionlocal.org/success',
+              method: 'wayback',
+              access: 'public',
+            },
+          },
+          {
+            id: 'src2',
+            url: 'https://missionlocal.org/fail',
+            publication: 'Mission Local',
+            tier: 1,
+            archive: {
+              url: 'https://web.archive.org/web/2/https://missionlocal.org/fail',
+              method: 'wayback',
+              access: 'public',
+            },
+          },
+        ],
+      };
+      writeFileSync(subjectPath, yaml.dump(subject), 'utf8');
+
+      const result = await ensureArchivedInFile(subjectPath, { pollIntervalMs: 1 });
+
+      // Verify result structure: 1 captured, 0 skipped, 1 failed
+      expect(result.captured).toHaveLength(1);
+      expect(result.captured[0]).toMatchObject({
+        sourceId: 'src1',
+        archivedUrl: 'https://web.archive.org/web/20260420111111/https://missionlocal.org/success',
+      });
+      expect(result.skipped).toHaveLength(0);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0]).toMatchObject({
+        sourceId: 'src2',
+        error: 'Network timeout',
+      });
+
+      // Verify file was written with source[0]'s new URL
+      const after = yaml.load(readFileSync(subjectPath, 'utf8')) as { sources: Array<{ archive: { url: string } }> };
+      expect(after.sources[0]!.archive.url).toBe(
+        'https://web.archive.org/web/20260420111111/https://missionlocal.org/success',
+      );
+      // source[1] should still have its placeholder
+      expect(after.sources[1]!.archive.url).toBe(
+        'https://web.archive.org/web/2/https://missionlocal.org/fail',
+      );
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 // Imperative shell: CLI that ensures each source has a concrete Wayback snapshot URL.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -20,6 +20,7 @@ function isPlaceholderArchive(archiveUrl: string): boolean {
 interface EnsureResult {
   captured: Array<{ sourceId: string; archivedUrl: string }>;
   skipped: Array<{ sourceId: string; reason: string }>;
+  failed: Array<{ sourceId: string; error: string }>;
 }
 
 export async function ensureArchivedInFile(
@@ -36,17 +37,21 @@ export async function ensureArchivedInFile(
     ...opts,
   };
 
-  const result: EnsureResult = { captured: [], skipped: [] };
+  const result: EnsureResult = { captured: [], skipped: [], failed: [] };
 
   for (const source of subject.sources) {
     if (!isPlaceholderArchive(source.archive.url)) {
       result.skipped.push({ sourceId: source.id, reason: 'already has concrete archive URL' });
       continue;
     }
-    const capture = await captureViaWayback(source.url, captureOpts);
-    source.archive.url = capture.archivedUrl;
-    source.archive.method = 'wayback';
-    result.captured.push({ sourceId: source.id, archivedUrl: capture.archivedUrl });
+    try {
+      const capture = await captureViaWayback(source.url, captureOpts);
+      source.archive.url = capture.archivedUrl;
+      source.archive.method = 'wayback';
+      result.captured.push({ sourceId: source.id, archivedUrl: capture.archivedUrl });
+    } catch (e) {
+      result.failed.push({ sourceId: source.id, error: (e as Error).message });
+    }
   }
 
   if (result.captured.length > 0) {
@@ -54,7 +59,10 @@ export async function ensureArchivedInFile(
       '# Updated by ensure-archived — captured snapshot URLs written into source records.',
       '',
     ].join('\n');
-    writeFileSync(filePath, header + yaml.dump(subject, { lineWidth: -1, sortKeys: false }), 'utf8');
+    // Write atomically via tmp+rename so a crash mid-write can't truncate the source YAML.
+    const tmpPath = `${filePath}.tmp`;
+    writeFileSync(tmpPath, header + yaml.dump(subject, { lineWidth: -1, sortKeys: false }), 'utf8');
+    renameSync(tmpPath, filePath);
   }
 
   return result;
@@ -89,6 +97,10 @@ async function main(): Promise<void> {
       const result = await ensureArchivedInFile(values.file);
       for (const c of result.captured) console.log(`✓ ${c.sourceId} → ${c.archivedUrl}`);
       for (const s of result.skipped) console.log(`· ${s.sourceId} (${s.reason})`);
+      for (const f of result.failed) console.error(`✗ ${f.sourceId}: ${f.error}`);
+      if (result.failed.length > 0) {
+        process.exit(1);
+      }
     } catch (e) {
       console.error(`✗ ${(e as Error).message}`);
       process.exit(1);
