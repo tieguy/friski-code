@@ -1,0 +1,37 @@
+id: jackie-fielder
+wikidata_qid: Q99524088
+label: Jackie Fielder
+description: Member of the SF Board of Supervisors representing District 9.
+scope: [person, politician, district-9]
+
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: wd-jackie-fielder
+  - id: C001
+    property: P39
+    value: F-SF-D9-Supervisor
+    start: 2025-01-08
+    end: null
+    source: missionlocal-2024-11-fielder-elected
+
+sources:
+  - id: missionlocal-2024-11-fielder-elected
+    url: https://missionlocal.org/example-article
+    publication: Mission Local
+    author: J. Reporter
+    date_published: 2024-11-07
+    tier: 1
+    archive:
+      url: https://web.archive.org/web/2024/https://missionlocal.org/example-article
+      method: wayback
+      access: public
+  - id: wd-jackie-fielder
+    url: https://www.wikidata.org/wiki/Q99524088
+    publication: Wikidata
+    tier: 2
+    archive:
+      url: https://web.archive.org/web/2024/https://www.wikidata.org/wiki/Q99524088
+      method: wayback
+      access: public
