@@ -2,19 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Last verified: 2026-04-20
+Last verified: 2026-04-20 (Phase 5 close)
 
 ## Status
 
-Phase 5 (seed real content) paused mid-Task-2 on 2026-04-20; resuming in a new session, proceeding to Phase 6. Phase 4 shipped authoring tooling + editorial docs. Phase 3's render pipeline ships a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`); `astro build` produces a static site from the fixture wiki. Phase 4 adds two authoring CLIs (`new-subject`, `ensure-archived`) backed by pure cores in `src/lib/` (Wikidata fetch, Wayback Save Page Now client), plus extracted editorial docs (`docs/editorial-principles.md`, `docs/archival-procedure.md`). No reviewer or deploy pipeline yet — those land in Phase 6 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
+Phases 1–5 complete; Phase 6 (reviewer GitHub Action) next. Phase 5 shipped a live seed corpus: 6 subjects (Jackie Fielder, SF Board of Supervisors, Mission District, Mission Local, DPW corruption scandal, DBI / Santos corruption case) and 5 article stubs, all sources with concrete Wayback snapshots. `frisco-wiki` main is pushed at tieguy/frisco-wiki HEAD `7f1cb86`; friski-code has the submodule-pointer bump at `15f7206`. Phase 4 shipped authoring tooling + editorial docs. Phase 3's render pipeline ships a shared `BaseLayout`, minimal CSS, three reusable components (`SubjectRef`, `Citation`, `ClaimsTable`), article pages (`/[slug]`), subject pages (`/subjects/[id]`), a content-listing homepage, and a query-derived index (`/index/current-supervisors`); `astro build` produces a static site (13 pages from the current corpus). Phase 4 adds two authoring CLIs (`new-subject`, `ensure-archived`) backed by pure cores in `src/lib/` (Wikidata fetch, Wayback Save Page Now client), plus extracted editorial docs (`docs/editorial-principles.md`, `docs/archival-procedure.md`). No reviewer or deploy pipeline yet — those land in Phases 6–7 of the MVP implementation plan (`plans/implementation-plans/2026-04-20-mvp/`).
 
-### Phase 5 partial state (paused 2026-04-20)
+### Phase 5 outcome
 
-Parent-repo HEAD is **54e2be7** (Phase 4 close). Uncommitted in parent: `config/allowed-types.yaml` adds 4 new P31 entries (Q1175507 board of supervisors, Q123705 neighborhood, Q11032 newspaper, F-political-scandal); a local `.env` file (gitignored) holds Archive.org S3 credentials.
+All Done-when criteria met except **Lighthouse accessibility scoring**, which remains operator-followup (flatpak Chrome sandbox blocks headless automation on the dev env). Run `npx lighthouse` against the served `dist/` from a machine with system Chrome to close that gap.
 
-Submodule at `src/content/wiki` is on `main`, **3 commits ahead of origin/main** (not yet pushed): `d37aba0` (6 seed subjects — jackie-fielder, sf-board-of-supervisors, mission-district, mission-local, dpw-corruption-scandal, dbi-corruption-scandal), `30e521c` (5 article stubs), `8a50d71` (concrete Wayback snapshots for 6 of 10 source URLs, 3 still placeholder, 1 TBD).
-
-Task status: 1 (subjects) done, 3 (article stubs) done, **2 (archiving) is 6/10 complete and blocked on the Wayback rate-limit lockout described below**, 4 (build/preview/push/submodule bump/smoke) not started. Tracker item `#25` remains `in_progress`. See memory file `phase-5-partial-state.md` for the task-by-task replay needed to resume.
+Clean-checkout smoke (`rm -rf node_modules dist .astro src/content/wiki && git submodule update --init && npm ci && npm run typecheck && npm test && npm run validate && npm run build`) passes end-to-end: 43 tests green, 0 typecheck errors, validator reports 6 subjects / 5 articles / 0 errors, build produces 13 pages.
 
 ### Phase 5 learnings (operator + CI-design implications)
 
