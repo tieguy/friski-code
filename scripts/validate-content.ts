@@ -139,19 +139,18 @@ export function validate(
   }
 
   // 4. Build subject graph to surface footnote resolution errors
-  if (errors.length === 0) {
-    try {
-      buildSubjectGraph(subjects, articles, allowedTypes);
-    } catch (e) {
-      if (e instanceof FootnoteResolutionError) {
-        errors.push({
-          file: `articles/${e.articleSlug}.md`,
-          rule: `footnote-${e.reason}`,
-          message: e.message,
-        });
-      } else {
-        throw e;
-      }
+  // Run unconditionally to surface footnote errors alongside other errors.
+  try {
+    buildSubjectGraph(subjects, articles, allowedTypes);
+  } catch (e) {
+    if (e instanceof FootnoteResolutionError) {
+      errors.push({
+        file: `articles/${e.articleSlug}.md`,
+        rule: `footnote-${e.reason}`,
+        message: e.message,
+      });
+    } else {
+      throw e;
     }
   }
 

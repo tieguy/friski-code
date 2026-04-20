@@ -128,4 +128,17 @@ describe('validate-content (rule coverage)', () => {
     const result = validate(root, allowedTypesPath);
     expect(result.errors.some((e) => e.rule === 'subject-id-unique')).toBe(true);
   });
+
+  test('surfaces footnote errors alongside schema errors', () => {
+    const root = makeCorpus(
+      ['_invalid-missing-archive-url.yaml', 'jackie-fielder.yaml'],
+      ['_invalid-footnote-unresolved.md'],
+    );
+    const result = validate(root, allowedTypesPath);
+    // Should have at least two errors: one schema-related and one footnote-related
+    const hasSchemaError = result.errors.some((e) => e.rule.startsWith('schema'));
+    const hasFootnoteError = result.errors.some((e) => e.rule === 'footnote-no-match');
+    expect(hasSchemaError).toBe(true);
+    expect(hasFootnoteError).toBe(true);
+  });
 });
