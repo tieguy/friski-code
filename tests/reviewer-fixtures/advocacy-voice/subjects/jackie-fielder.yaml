@@ -1,0 +1,20 @@
+id: jackie-fielder
+wikidata_qid: Q98157141
+label: Jackie Fielder
+description: American politician
+scope:
+  - person
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: wd-jackie-fielder
+sources:
+  - id: wd-jackie-fielder
+    url: https://www.wikidata.org/wiki/Q98157141
+    publication: Wikidata
+    tier: 2
+    archive:
+      url: https://web.archive.org/web/20260420/https://www.wikidata.org/wiki/Q98157141
+      method: wayback
+      access: public

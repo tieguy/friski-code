@@ -1,0 +1,11 @@
+allowed_types:
+  - Q5                  # human
+  - Q515                # city
+  - Q43229              # organization
+  - Q1048835            # political territorial entity
+  - Q1175507            # board of supervisors
+  - Q123705             # neighborhood
+  - Q11032              # newspaper
+  - F-neighborhood      # Friski-local: SF neighborhood
+  - F-landmark          # Friski-local: named place without Wikidata entry
+  - F-political-scandal # Friski-local: political scandal

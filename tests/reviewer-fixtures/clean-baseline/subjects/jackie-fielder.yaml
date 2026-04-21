@@ -1,0 +1,40 @@
+id: jackie-fielder
+wikidata_qid: Q98157141
+label: Jackie Fielder
+description: American politician serving as District 9 Supervisor on the San Francisco Board of Supervisors.
+scope:
+  - person
+  - politician
+  - district-9
+claims:
+  - id: C000
+    property: P31
+    value: Q5
+    source: wd-jackie-fielder
+  - id: C001
+    property: P27
+    value: Q30
+    source: wd-jackie-fielder
+  - id: C002
+    property: P39
+    value: F-SF-D9-Supervisor
+    start: 2025-01-08T00:00:00.000Z
+    source: missionlocal-2024-fielder-wins
+sources:
+  - id: wd-jackie-fielder
+    url: https://www.wikidata.org/wiki/Q98157141
+    publication: Wikidata
+    tier: 2
+    archive:
+      url: https://web.archive.org/web/20260420/https://www.wikidata.org/wiki/Q98157141
+      method: wayback
+      access: public
+  - id: missionlocal-2024-fielder-wins
+    url: https://missionlocal.org/2024/11/jackie-fielder-winning/
+    publication: Mission Local
+    date_published: 2024-11-06T00:00:00.000Z
+    tier: 1
+    archive:
+      url: https://web.archive.org/web/20260420/https://missionlocal.org/2024/11/jackie-fielder-winning/
+      method: wayback
+      access: public

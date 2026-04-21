@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "validate": "tsx scripts/validate-content.ts",
     "new-subject": "tsx scripts/new-subject.ts",
-    "ensure-archived": "tsx scripts/ensure-archived.ts"
+    "ensure-archived": "tsx scripts/ensure-archived.ts",
+    "reviewer": "tsx scripts/reviewer/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
