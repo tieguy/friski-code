@@ -97,7 +97,11 @@ async function main(): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((e) => {
-    console.error(e);
+    if (e instanceof Error) {
+      console.error(`Error: ${e.message}`);
+    } else {
+      console.error(e);
+    }
     process.exit(1);
   });
 }

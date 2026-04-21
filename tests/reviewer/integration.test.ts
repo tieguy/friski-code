@@ -88,7 +88,6 @@ function fixturePaths(name: string) {
   const root = join(fixturesRoot, name);
   return {
     contentRoot: root,
-    allowedTypesPath: join(root, 'allowed-types.yaml'),
     editorialPrinciplesPath: join(root, 'editorial-principles.md'),
   };
 }
