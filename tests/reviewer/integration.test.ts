@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeAll } from 'vitest';
+import { describe, expect, test, vi, beforeAll, afterAll } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { runReview } from '../../scripts/reviewer/index';
@@ -29,6 +29,10 @@ beforeAll(() => {
   }));
 });
 
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
+
 // Mock the LLM client module to return canned findings per fixture.
 // This is an integration test of orchestration, NOT a live-API test.
 vi.mock('../../scripts/reviewer/llm', async () => {
@@ -43,13 +47,17 @@ vi.mock('../../scripts/reviewer/llm', async () => {
 
       return {
         callForFindings: async ({ systemPrompt, userPrompt }: { systemPrompt: string; userPrompt: string }) => {
-          // On first call, detect which fixture by looking at article file path in the userPrompt
+          // On first call, detect which fixture by looking at stable content markers (article file path or distinctive prose).
+          // Use file path when available, fall back to prose patterns as a safety net.
           if (currentFixture === null) {
-            if (userPrompt.includes('Fielder chairs the Land Use Committee')) {
+            if (userPrompt.includes('Article file: articles/claim-less-assertion/') ||
+                (userPrompt.includes('Land Use Committee') && userPrompt.includes('[^ml]: ml-fielder'))) {
               currentFixture = 'claim-less-assertion';
-            } else if (userPrompt.includes('She won the election by a landslide')) {
+            } else if (userPrompt.includes('Article file: articles/overreach/') ||
+                       (userPrompt.includes('won the election by a landslide') && userPrompt.includes('[^ml]: ml-election'))) {
               currentFixture = 'overreach';
-            } else if (userPrompt.includes('a notorious developer')) {
+            } else if (userPrompt.includes('Article file: articles/advocacy-voice/') ||
+                       (userPrompt.includes('notorious developer') && userPrompt.includes('Critics argue'))) {
               currentFixture = 'advocacy-voice';
             } else {
               currentFixture = 'clean-baseline';

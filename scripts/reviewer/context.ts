@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import yaml from 'js-yaml';
 import matter from 'gray-matter';
 import { subjectSchema, articleSchema, resolveArticle } from '../../src/content-schemas';
@@ -37,9 +37,10 @@ export interface LoadedContent {
   editorialPrinciples: string;
 }
 
+// P31 allowlist enforcement is the validator's job (see scripts/validate-content.ts);
+// the reviewer only validates editorial quality against the already-validated graph.
 export function loadContent(
   contentRoot: string,
-  _allowedTypesPath: string,
   editorialPrinciplesPath: string,
 ): LoadedContent {
   const subjectsDir = join(contentRoot, 'subjects');
@@ -81,8 +82,5 @@ export function loadContent(
 
 function readdirSyncFiltered(dir: string, ...exts: string[]): string[] {
   if (!existsSync(dir)) return [];
-  const fs = require('node:fs') as typeof import('node:fs');
-  return fs.readdirSync(dir).filter((f) => exts.some((e) => f.endsWith(e)));
+  return readdirSync(dir).filter((f) => exts.some((e) => f.endsWith(e)));
 }
-
-export { resolve };

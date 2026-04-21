@@ -12,7 +12,6 @@ import type { CheckResult, ReviewResult } from './types';
 
 interface RunOptions {
   contentRoot: string;
-  allowedTypesPath: string;
   editorialPrinciplesPath: string;
   changedArticles?: string[];   // restrict review to these article files; default: all
 }
@@ -20,7 +19,6 @@ interface RunOptions {
 export async function runReview(opts: RunOptions): Promise<ReviewResult> {
   const { contextByArticle } = loadContent(
     opts.contentRoot,
-    opts.allowedTypesPath,
     opts.editorialPrinciplesPath,
   );
 
@@ -50,7 +48,6 @@ async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
       'content-root': { type: 'string', default: 'src/content/wiki' },
-      'allowed-types': { type: 'string', default: 'config/allowed-types.yaml' },
       'editorial-principles': { type: 'string', default: 'docs/editorial-principles.md' },
       'changed-files': { type: 'string' },   // comma-separated article files
       'dry-run': { type: 'boolean', default: false },
@@ -63,7 +60,6 @@ async function main(): Promise<void> {
 
   const review = await runReview({
     contentRoot: resolve(values['content-root']!),
-    allowedTypesPath: resolve(values['allowed-types']!),
     editorialPrinciplesPath: resolve(values['editorial-principles']!),
     changedArticles,
   });
